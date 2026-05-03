@@ -1,0 +1,16 @@
+{
+  "ERROR_ASSET_NOT_FOUND": "سامانه ای با این عنوان یافت نشد",
+  "ERROR_NOT_FOUND_RECORD": "رکورد یافت نشد",
+  "ERROR_DUPLICATE_GROUP": "گروه مورد نظر وجود دارد",
+  "ERROR_APPLICANT_INFO": "اطلاعات مربوط به مدیر دریافت نشد",
+  "ERROR_NOT_FOUND_ASSETS_OR_APPLICANT_MANAGER": "سامانه یا مدیر مدنظر یافت نشد",
+  "ERROR_NOT_FOUND_PROPERTY": "$t(objects.{property}) یافت نشد",
+  "ERROR_SCHEMA_VALIDATION_FAILED": "اطلاعات وارد شده صحیح نمیباشد",
+  "ERROR_INVALID_JSON_SCHEMA": "schema وارد شده صحیح نمیباشد",
+  "ERROR_SCHEMA_IS_NOT_DEFINED": "schema تعریف نشده است",
+  "ERROR_ASSESSMENT_TYPE_ID_INVALID": "نوع درخواست وارد شده صحیح نمی‌باشد",
+  "NO_CISO": "کاربری با نقش ciso یافت نشد",
+  "ERROR_PROPERTY_ID_INVALID": "$t(objects.{property}) با id وارد شده صحیح نمی‌باشد: {value}",
+  "ERROR_UNSUPPORTED_FILE_EXTENSION": "فرمت فایل صحیح نمی باشد",
+  "ERROR_HAS_RELATION": "به دلیل ارتباط با \"{property}\" امکان حذف وجود ندارد"
+}

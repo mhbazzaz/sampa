@@ -1,0 +1,73 @@
+services:
+  db:
+    image: docker.secuscope.iranet.net/postgres:16.3-alpine3.20
+    restart: always
+    container_name: sampa-postgres
+    environment:
+      - POSTGRES_USER=$DATABASE_USERNAME
+      - POSTGRES_PASSWORD=$DATABASE_PASSWORD
+      - POSTGRES_DB=$DATABASE_NAME
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "sh -c 'pg_isready -U ${DATABASE_USERNAME} -d ${DATABASE_NAME}'",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - 8586:5432
+    logging:
+      options:
+        max-size: 5m
+    networks:
+      - sampa
+
+  migration:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sampa-migration
+    command: sh -c "npm run production:migration:run && npm run production:seed"
+    depends_on:
+      db:
+        condition: service_healthy
+    logging:
+      options:
+        max-size: 5m
+    networks:
+      - main-network
+      - sampa
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    container_name: sampa-nest
+    depends_on:
+      db:
+        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
+    logging:
+      options:
+        max-size: 5m
+    volumes:
+      - ./files:/app/files
+    networks:
+      - main-network
+      - sampa
+
+networks:
+  main-network:
+    external: true
+  sampa:
+    name: sampa
+    driver: bridge
+
+volumes:
+  postgres:

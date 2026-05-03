@@ -1,0 +1,17 @@
+{
+  "ERROR_ASSET_NOT_FOUND": "ASSET NOT FOUND",
+  "ERROR__NOT_FOUND_ASSET_TYPE_FOR_ASSET": "Not found asset type for this asset",
+  "ERROR_NOT_FOUND_RECORD": "NOT FOUND RECORD",
+  "ERROR_DUPLICATE_GROUP": "ERROR DUPLICATE GROUP",
+  "ERROR_APPLICANT_INFO": "ERROR APPLICANT INFO",
+  "ERROR_NOT_FOUND_ASSETS_OR_APPLICANT_MANAGER": " NOT FOUND ASSETS OR APPLICANT MANAGER",
+  "ERROR_NOT_FOUND_PROPERTY": "{property} does not exists",
+  "ERROR_SCHEMA_VALIDATION_FAILED": "schema validation failed",
+  "ERROR_INVALID_JSON_SCHEMA": "invalid JSON schema",
+  "ERROR_SCHEMA_IS_NOT_DEFINED": "schema is not defined",
+  "ERROR_ASSESSMENT_TYPE_ID_INVALID": "One or more AssessmentType IDs are invalid",
+  "NO_CISO": "no ciso found",
+  "ERROR_PROPERTY_ID_INVALID": "{property} with ID {value} not found",
+  "ERROR_UNSUPPORTED_FILE_EXTENSION": "Unsupported file extension",
+  "ERROR_HAS_RELATION": "cannot delete this, due to relation with {property}"
+}
