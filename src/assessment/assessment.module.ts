@@ -1,5 +1,6 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ActionLogModule } from 'src/action-log/action-log.module';
 import { ActionModule } from 'src/action/action.module';
 import { AssetModule } from 'src/asset/asset.module';
 import { EnvironmentModule } from 'src/environment/environment.module';
@@ -37,6 +38,7 @@ import { AssessmentTypeService } from './services/assessment-type.service';
       AssessmentLayer,
       RequestSpecItem,
     ]),
+    ActionLogModule,
     EnvironmentModule,
     AssetModule,
     ActionModule,

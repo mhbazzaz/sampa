@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ActionLogModule } from 'src/action-log/action-log.module';
 import { AssessmentModule } from 'src/assessment/assessment.module';
 import { AssetModule } from 'src/asset/asset.module';
 import { ValidationService } from 'src/common/validations/schema-validation.service';
@@ -25,6 +26,7 @@ import { RequestSpecItemService } from './services/request-spec-item.service';
       RequestSpecGroup,
       RequestSpecItem,
     ]),
+    ActionLogModule,
     AssetModule,
     EnvironmentModule,
     AssessmentModule,

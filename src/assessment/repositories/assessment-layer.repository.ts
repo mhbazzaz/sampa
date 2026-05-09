@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { I18nService } from 'nestjs-i18n';
-import { ActionLogRepository } from 'src/action-log/repositories/action-log.repository';
+import { ActionLogBufferService } from 'src/action-log/services/action-log-buffer.service';
 import { Action } from 'src/action/entities/action.entity';
 import { ActionRepository } from 'src/action/repositories/action.repository';
 import { ActionLogStatusEnum } from 'src/common/enums/action-log.enum';
@@ -44,11 +44,11 @@ export class AssessmentLayerRepository extends AbstractRepository<AssessmentLaye
     private groupMembershipRepository: GroupMembershipRepository,
     private statesRepository: StatesRepository,
     private processRepository: ProcessRepository,
-    private actionLogRepository: ActionLogRepository,
     private actionRepository: ActionRepository,
     private stateTransitionService: StateTransitionService,
     private readonly dataSource: DataSource,
     private readonly i18nService: I18nService,
+    private readonly actionLogBufferService: ActionLogBufferService,
   ) {
     super(assessmentLayerRepository, i18nService);
   }
@@ -192,16 +192,22 @@ export class AssessmentLayerRepository extends AbstractRepository<AssessmentLaye
         //   }
         // }
 
-        await this.actionLogRepository.save({
-          action: element.action as ActionEnum,
-          userId: member.id,
-          roleIds: memberRoles.map((r) => r.id),
-          status: ActionLogStatusEnum.SUCCESS,
-          assessmentRequestId: layer.assessmentRequestId,
-          assessmentLayerId: layer.id,
-          assessmentLayerCurrentStateId: layerCurrentStateId,
-          assessmentLayerNextStateId: stateTransition.id,
-        });
+        await this.actionLogBufferService.flushToActionLog(
+          {
+            assessmentRequestId: layer.assessmentRequestId,
+            assessmentLayerId: layer.id,
+          },
+          {
+            userId: member.id,
+            roleIds: memberRoles.map((r) => r.id),
+            action: element.action as ActionEnum,
+            status: ActionLogStatusEnum.SUCCESS,
+            assessmentRequestCurrentStateId: null,
+            assessmentRequestNextStateId: null,
+            assessmentLayerCurrentStateId: layerCurrentStateId,
+            assessmentLayerNextStateId: stateTransition.id,
+          },
+        );
       }
 
       await queryRunner.commitTransaction();
@@ -357,16 +363,22 @@ export class AssessmentLayerRepository extends AbstractRepository<AssessmentLaye
 
         layer.stateId = stateTransition.id;
 
-        await this.actionLogRepository.save({
-          action: ActionEnum.SupervisedAssignAllTeamsAuditors,
-          userId: member.id,
-          roleIds: memberRoles.map((r) => r.id),
-          status: ActionLogStatusEnum.SUCCESS,
-          assessmentRequestId: layer.assessmentRequestId,
-          assessmentLayerId: layer.id,
-          assessmentLayerCurrentStateId: layerCurrentStateId,
-          assessmentLayerNextStateId: stateTransition.id,
-        });
+        await this.actionLogBufferService.flushToActionLog(
+          {
+            assessmentRequestId: layer.assessmentRequestId,
+            assessmentLayerId: layer.id,
+          },
+          {
+            userId: member.id,
+            roleIds: memberRoles.map((r) => r.id),
+            action: ActionEnum.SupervisedAssignAllTeamsAuditors,
+            status: ActionLogStatusEnum.SUCCESS,
+            assessmentRequestCurrentStateId: null,
+            assessmentRequestNextStateId: null,
+            assessmentLayerCurrentStateId: layerCurrentStateId,
+            assessmentLayerNextStateId: stateTransition.id,
+          },
+        );
       }
 
       // const otherLayers = await this.assessmentLayerRepository.find({

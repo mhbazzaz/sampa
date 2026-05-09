@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
+import { ActionLogBufferService } from 'src/action-log/services/action-log-buffer.service';
 import { TestCaseRemediateApproachEnum } from 'src/common/enums/test-case-remediate-approach.enum';
 import { Member } from 'src/member/entities/member.entity';
 import { TestcaseContentRepository } from 'src/test-case/repositories/test-case-content.repository';
@@ -15,6 +16,7 @@ export class TestcaseRemediateService {
     private readonly testcaseRemediateRepository: TestcaseRemediateRepository,
     private readonly testcaseContentRepository: TestcaseContentRepository,
     private readonly i18nService: I18nService,
+    private readonly actionLogBufferService: ActionLogBufferService,
   ) {}
 
   //------------------------------
@@ -39,6 +41,7 @@ export class TestcaseRemediateService {
 
     const existingContent = await this.testcaseContentRepository.findOne({
       where: { id: data.testcaseContentId },
+      relations: { assessmentRequest: true },
     });
 
     if (!existingContent) {
@@ -49,10 +52,30 @@ export class TestcaseRemediateService {
       );
     }
 
-    return await this.testcaseRemediateRepository.save({
+    const created = await this.testcaseRemediateRepository.save({
       ...data,
       memberId: member.id,
     });
+
+    if (existingContent.assessmentRequestId) {
+      await this.actionLogBufferService.addChange(
+        { assessmentRequestId: existingContent.assessmentRequestId },
+        {
+          entityType: 'remediate',
+          beforeEntity: {},
+          updateDto: data,
+          userId: member.id,
+          assessmentRequestCurrentStateId:
+            existingContent.assessmentRequest?.stateId ?? null,
+          assessmentRequestNextStateId:
+            existingContent.assessmentRequest?.stateId ?? null,
+          assessmentLayerCurrentStateId: null,
+          assessmentLayerNextStateId: null,
+        },
+      );
+    }
+
+    return created;
   }
 
   //------------------------------

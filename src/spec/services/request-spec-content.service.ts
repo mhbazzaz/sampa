@@ -1,12 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
-import { ActionLogRepository } from 'src/action-log/repositories/action-log.repository';
+import { ActionLogBufferService } from 'src/action-log/services/action-log-buffer.service';
 import { AssessmentLayer } from 'src/assessment/entities/assessment-layer.entity';
 import { AssessmentRequest } from 'src/assessment/entities/assessment-request.entity';
 import { AssessmentLayerRepository } from 'src/assessment/repositories/assessment-layer.repository';
 import { AssessmentRequestRepository } from 'src/assessment/repositories/assessment-request.repository';
-import { ActionLogStatusEnum } from 'src/common/enums/action-log.enum';
-import { ActionEnum } from 'src/common/enums/action.enum';
 import { ValidationService } from 'src/common/validations/schema-validation.service';
 import { GroupMembershipRepository } from 'src/group-membership/repositories/group-membership.repository';
 import { Member } from 'src/member/entities/member.entity';
@@ -25,11 +23,11 @@ export class RequestSpecContentService {
     private readonly requestSpecContentRepository: RequestSpecContentRepository,
     private readonly groupMembershipRepository: GroupMembershipRepository,
     private readonly assessmentRequestRepository: AssessmentRequestRepository,
-    private readonly actionLogRepository: ActionLogRepository,
     private readonly requestSpecItemService: RequestSpecItemService,
     private readonly assessmentLayerRepository: AssessmentLayerRepository,
     private readonly validationService: ValidationService,
     private i18nService: I18nService,
+    private readonly actionLogBufferService: ActionLogBufferService,
   ) {}
 
   //------------------------------
@@ -97,36 +95,44 @@ export class RequestSpecContentService {
         requestSpecContent.requestSpecItemId === specItemId,
     );
 
-    if (foundItem.assessmentType) {
-      for (let i = 0; i < foundItem.assessmentType.length; i++) {
-        const element = foundItem.assessmentType[i];
-
-        const layer = request.assessmentLayers?.find(
-          (layer) => layer.assessmentTypeId === element.id,
-        );
-
-        if (!layer) {
-          continue;
-        }
-
-        await this.actionLogRepository.save({
-          action: ActionEnum.PendingLayerSpecsSubmit,
-          userId: member.id,
-          roleIds: memberRoles.map((r) => r.id),
-          status: ActionLogStatusEnum.SUCCESS,
-          assessmentRequestId: request.id,
-          assessmentLayerId: layer.id,
-          assessmentLayerCurrentStateId: layer.stateId,
-          assessmentLayerNextStateId: layer.stateId,
-        });
-      }
-    }
-
     if (!exists) {
       await this.requestSpecContentRepository.save(body);
+
+      await this.actionLogBufferService.addChange(
+        { assessmentRequestId },
+        {
+          entityType: 'spec',
+          beforeEntity: {},
+          updateDto: body,
+          userId: member.id,
+          assessmentRequestCurrentStateId: request.stateId,
+          assessmentRequestNextStateId: request.stateId,
+          assessmentLayerCurrentStateId: null,
+          assessmentLayerNextStateId: null,
+        },
+      );
+
       return 'saved';
     } else {
+      const beforeEntity = await this.requestSpecContentRepository.findOne({
+        where: { id: exists.id },
+      });
       await this.requestSpecContentRepository.update({ id: exists.id }, body);
+
+      await this.actionLogBufferService.addChange(
+        { assessmentRequestId },
+        {
+          entityType: 'spec',
+          beforeEntity: beforeEntity || {},
+          updateDto: body,
+          userId: member.id,
+          assessmentRequestCurrentStateId: request.stateId,
+          assessmentRequestNextStateId: request.stateId,
+          assessmentLayerCurrentStateId: null,
+          assessmentLayerNextStateId: null,
+        },
+      );
+
       return 'updated';
     }
   }
@@ -142,6 +148,7 @@ export class RequestSpecContentService {
 
     const layer = await this.assessmentLayerRepository.findOne({
       where,
+      relations: { assessmentRequest: true },
     });
 
     if (!layer) {
@@ -178,8 +185,45 @@ export class RequestSpecContentService {
     };
     if (!exists) {
       await this.requestSpecContentRepository.save(body);
+
+      await this.actionLogBufferService.addChange(
+        { assessmentRequestId: layer.assessmentRequestId, assessmentLayerId },
+        {
+          entityType: 'spec',
+          beforeEntity: {},
+          updateDto: body,
+          userId: member.id,
+          assessmentRequestCurrentStateId:
+            layer.assessmentRequest?.stateId ?? null,
+          assessmentRequestNextStateId: layer.assessmentRequest?.stateId ?? null,
+          assessmentLayerCurrentStateId: layer.stateId,
+          assessmentLayerNextStateId: layer.stateId,
+        },
+      );
     } else {
-      return this.requestSpecContentRepository.update({ id: exists.id }, body);
+      const beforeEntity = await this.requestSpecContentRepository.findOne({
+        where: { id: exists.id },
+      });
+      const updated = await this.requestSpecContentRepository.update(
+        { id: exists.id },
+        body,
+      );
+
+      await this.actionLogBufferService.addChange(
+        { assessmentRequestId: layer.assessmentRequestId, assessmentLayerId },
+        {
+          entityType: 'spec',
+          beforeEntity: beforeEntity || {},
+          updateDto: body,
+          userId: member.id,
+          assessmentRequestCurrentStateId:
+            layer.assessmentRequest?.stateId ?? null,
+          assessmentRequestNextStateId: layer.assessmentRequest?.stateId ?? null,
+          assessmentLayerCurrentStateId: layer.stateId,
+          assessmentLayerNextStateId: layer.stateId,
+        },
+      );
+      return updated;
     }
   }
 

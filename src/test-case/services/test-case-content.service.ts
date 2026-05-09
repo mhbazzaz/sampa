@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
+import { ActionLogBufferService } from 'src/action-log/services/action-log-buffer.service';
 import { AssessmentRequestRepository } from 'src/assessment/repositories/assessment-request.repository';
 import { ContentStatus } from 'src/common/enums/test-case-content-status.enum';
 import { ContentCriticality } from 'src/common/enums/test-case-criticality.enum';
@@ -17,6 +18,7 @@ export class TestcaseContentService {
     private readonly testcaseItemRepository: TestcaseItemRepository,
     private readonly assessmentRequestRepository: AssessmentRequestRepository,
     private readonly i18nService: I18nService,
+    private readonly actionLogBufferService: ActionLogBufferService,
   ) {}
 
   //------------------------------
@@ -77,8 +79,14 @@ export class TestcaseContentService {
   async update(
     id: FindOptionsWhere<TestcaseContent>,
     dto: UpdateTestcaseContentDto,
+    userId?: string,
+    ipAddress?: string,
   ): Promise<TestcaseContent> {
     const updatePayload: Partial<TestcaseContent> = {};
+    const beforeEntity = await this.testcaseContentRepository.findOne({
+      where: id,
+      relations: { assessmentRequest: true },
+    });
 
     for (const [key, value] of Object.entries(dto)) {
       const typedKey = key as keyof UpdateTestcaseContentDto;
@@ -150,7 +158,35 @@ export class TestcaseContentService {
       }
     }
 
-    return await this.testcaseContentRepository.update(id, updatePayload);
+    const updated = await this.testcaseContentRepository.update(
+      id,
+      updatePayload,
+    );
+
+    if (beforeEntity && userId && beforeEntity.assessmentRequestId) {
+      await this.actionLogBufferService.addChange(
+        {
+          assessmentRequestId: beforeEntity.assessmentRequestId,
+        },
+        {
+          entityType: 'testcase',
+          beforeEntity,
+          updateDto: dto,
+          userId,
+          ipAddress,
+          assessmentRequestCurrentStateId:
+            beforeEntity.assessmentRequest?.stateId ?? null,
+          assessmentRequestNextStateId:
+            updatePayload.assessmentRequest?.stateId ??
+            beforeEntity.assessmentRequest?.stateId ??
+            null,
+          assessmentLayerCurrentStateId: null,
+          assessmentLayerNextStateId: null,
+        },
+      );
+    }
+
+    return updated;
   }
 
   //------------------------------

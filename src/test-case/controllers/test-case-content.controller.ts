@@ -16,6 +16,7 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { CurrentMember } from 'src/common/decorators/current-member.decorators';
 import { AdminGuard } from 'src/common/guards/admin.guard';
 import { AuthorizationGuard } from 'src/common/guards/authorization.guard';
 import { UserGuard } from 'src/common/guards/user.guard';
@@ -26,6 +27,7 @@ import { CreateTestcaseContentDto } from '../dto/input/create-test-case-content.
 import { UpdateTestcaseContentDto } from '../dto/input/update-test-case-content.dto';
 import { GetTestcaseDto } from '../dto/response/get-test-case.dto';
 import { TestcaseContentService } from '../services/test-case-content.service';
+import { Member } from 'src/member/entities/member.entity';
 
 @ApiBearerAuth('idp-token')
 @Controller('')
@@ -164,8 +166,9 @@ export class TestcaseContentController {
   async updateAdminScope(
     @Param('id') id: string,
     @Body() data: UpdateTestcaseContentDto,
+    @CurrentMember() member: Member,
   ) {
-    const result = await this.testcaseContentService.update({ id }, data);
+    const result = await this.testcaseContentService.update({ id }, data, member.id);
     return responseGenerator({
       statusCode: 200,
       message: 'successful',
@@ -187,8 +190,9 @@ export class TestcaseContentController {
   async updateUserScope(
     @Param('id') id: string,
     @Body() data: UpdateTestcaseContentDto,
+    @CurrentMember() member: Member,
   ) {
-    const result = await this.testcaseContentService.update({ id }, data);
+    const result = await this.testcaseContentService.update({ id }, data, member.id);
     return responseGenerator({
       statusCode: 200,
       message: 'successful',

@@ -26,6 +26,10 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+## Internal Docs
+
+- Action log buffer flow: `docs/action-log-buffer-flow.md`
+
 ## Project setup
 
 ```bash

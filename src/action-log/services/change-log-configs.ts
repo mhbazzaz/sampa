@@ -6,10 +6,12 @@ import { AssetType } from 'src/asset/entities/asset-type.entity';
 import { ChangelogConfig } from 'src/common/interfaces/change-log-config.interface';
 import { Environment } from 'src/environment/entities/environment.entity';
 import { Member } from 'src/member/entities/member.entity';
+import { RequestSpecItem } from 'src/spec/entities/request-spec-item.entity';
 import { RequestSpecGroup } from 'src/spec/entities/request-spec-group.entity';
 import { State } from 'src/states/entities/state.entity';
 import { TestcaseContent } from 'src/test-case/entities/testcase-content.entity';
 import { TestcaseGroup } from 'src/test-case/entities/testcase-group.entity';
+import { TestcaseItem } from 'src/test-case/entities/testcase-item.entity';
 import { Vault } from 'src/vault/vault';
 import { Repository } from 'typeorm';
 
@@ -28,6 +30,10 @@ export class ChangelogConfigFactory {
     private readonly testcaseGroupRepository: Repository<TestcaseGroup>,
     @InjectRepository(TestcaseContent)
     private readonly testcaseContentRepository: Repository<TestcaseContent>,
+    @InjectRepository(TestcaseItem)
+    private readonly testcaseItemRepository: Repository<TestcaseItem>,
+    @InjectRepository(RequestSpecItem)
+    private readonly requestSpecItemRepository: Repository<RequestSpecItem>,
     @InjectRepository(RequestSpecGroup)
     private readonly requestSpecGroupRepository: Repository<RequestSpecGroup>,
     @InjectRepository(AssetType)
@@ -123,6 +129,30 @@ export class ChangelogConfigFactory {
   }
 
   //------------------------------
+  getTestcaseContentConfig(): ChangelogConfig {
+    return {
+      trackedFields: [
+        'observations',
+        'proves',
+        'references',
+        'suggestions',
+        'criticality',
+        'status',
+        'assessmentRequestId',
+        'testcaseItemId',
+      ],
+      fieldResolvers: {
+        testcaseItemId: {
+          type: 'repository',
+          repository: this.testcaseItemRepository,
+          labelField: 'name',
+        },
+      },
+      fetchUsers: (userIds) => this.fetchUsersByIds(userIds),
+    };
+  }
+
+  //------------------------------
   getTestcaseRemediateConfig(): ChangelogConfig {
     return {
       trackedFields: [
@@ -143,6 +173,21 @@ export class ChangelogConfigFactory {
         memberId: {
           type: 'repository',
           repository: this.memberRepository,
+          labelField: 'name',
+        },
+      },
+      fetchUsers: (userIds) => this.fetchUsersByIds(userIds),
+    };
+  }
+
+  //------------------------------
+  getRequestSpecContentConfig(): ChangelogConfig {
+    return {
+      trackedFields: ['value', 'assessmentRequestId', 'requestSpecItemId'],
+      fieldResolvers: {
+        requestSpecItemId: {
+          type: 'repository',
+          repository: this.requestSpecItemRepository,
           labelField: 'name',
         },
       },

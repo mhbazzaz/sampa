@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
-import { ActionLogRepository } from 'src/action-log/repositories/action-log.repository';
+import { ActionLogBufferService } from 'src/action-log/services/action-log-buffer.service';
 import { ActionRepository } from 'src/action/repositories/action.repository';
 import { ActionLogStatusEnum } from 'src/common/enums/action-log.enum';
 import { ActionEnum } from 'src/common/enums/action.enum';
@@ -48,7 +48,7 @@ export class AssessmentLayerService {
     private readonly i18nService: I18nService,
     private readonly actionRepository: ActionRepository,
     private readonly dataSource: DataSource,
-    private actionLogRepository: ActionLogRepository,
+    private readonly actionLogBufferService: ActionLogBufferService,
   ) {}
 
   //------------------------------
@@ -317,18 +317,22 @@ export class AssessmentLayerService {
       }
       await queryRunner.commitTransaction();
 
-      await this.actionLogRepository.save({
-        action: data.action as ActionEnum,
-        userId: memberId,
-        roleIds: memberRoles.map((r) => r.id),
-        status: ActionLogStatusEnum.SUCCESS,
-        assessmentRequestId: requestLayer.assessmentRequestId,
-        assessmentLayerId: requestLayer.id,
-        assessmentLayerCurrentStateId: layerCurrentStateId,
-        assessmentLayerNextStateId: stateTransition.id,
-        assessmentRequestCurrentStateId: currentRequestState,
-        assessmentRequestNextStateId: nextRequestState,
-      });
+      await this.actionLogBufferService.flushToActionLog(
+        {
+          assessmentRequestId: requestLayer.assessmentRequestId,
+          assessmentLayerId: requestLayer.id,
+        },
+        {
+          userId: memberId,
+          roleIds: memberRoles.map((r) => r.id),
+          action: data.action as ActionEnum,
+          status: ActionLogStatusEnum.SUCCESS,
+          assessmentRequestCurrentStateId: currentRequestState,
+          assessmentRequestNextStateId: nextRequestState,
+          assessmentLayerCurrentStateId: layerCurrentStateId,
+          assessmentLayerNextStateId: stateTransition.id,
+        },
+      );
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -521,16 +525,22 @@ export class AssessmentLayerService {
       // }
       await queryRunner.commitTransaction();
 
-      await this.actionLogRepository.save({
-        action: ActionEnum.PendingLayerTestcasesSubmit,
-        userId: member.id,
-        roleIds: memberRoles.map((r) => r.id),
-        status: ActionLogStatusEnum.SUCCESS,
-        assessmentRequestId: layer.assessmentRequestId,
-        assessmentLayerId: layer.id,
-        assessmentLayerCurrentStateId: layerCurrentStateId,
-        assessmentLayerNextStateId: stateTransition.id,
-      });
+      await this.actionLogBufferService.flushToActionLog(
+        {
+          assessmentRequestId: layer.assessmentRequestId,
+          assessmentLayerId: layer.id,
+        },
+        {
+          userId: member.id,
+          roleIds: memberRoles.map((r) => r.id),
+          action: ActionEnum.PendingLayerTestcasesSubmit,
+          status: ActionLogStatusEnum.SUCCESS,
+          assessmentRequestCurrentStateId: null,
+          assessmentRequestNextStateId: null,
+          assessmentLayerCurrentStateId: layerCurrentStateId,
+          assessmentLayerNextStateId: stateTransition.id,
+        },
+      );
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -579,7 +589,7 @@ export class AssessmentLayerService {
       select: { stateId: true },
     });
 
-    const allInAllowedStates = layers.every((layer) =>
+    const allInAllowedStates = layers.every((layer: AssessmentLayer) =>
       allowedStateIds.includes(layer.stateId),
     );
 
@@ -722,18 +732,22 @@ export class AssessmentLayerService {
 
       await queryRunner.commitTransaction();
 
-      await this.actionLogRepository.save({
-        action: data.action as ActionEnum,
-        userId: member.id,
-        roleIds: memberRoles.map((r) => r.id),
-        status: ActionLogStatusEnum.SUCCESS,
-        assessmentRequestId: requestLayer.assessmentRequestId,
-        assessmentLayerId: requestLayer.id,
-        assessmentLayerCurrentStateId: layerCurrentStateId,
-        assessmentLayerNextStateId: stateTransition.id,
-        assessmentRequestCurrentStateId: currentRequestState,
-        assessmentRequestNextStateId: nextRequestState,
-      });
+      await this.actionLogBufferService.flushToActionLog(
+        {
+          assessmentRequestId: requestLayer.assessmentRequestId,
+          assessmentLayerId: requestLayer.id,
+        },
+        {
+          userId: member.id,
+          roleIds: memberRoles.map((r) => r.id),
+          action: data.action as ActionEnum,
+          status: ActionLogStatusEnum.SUCCESS,
+          assessmentRequestCurrentStateId: currentRequestState,
+          assessmentRequestNextStateId: nextRequestState,
+          assessmentLayerCurrentStateId: layerCurrentStateId,
+          assessmentLayerNextStateId: stateTransition.id,
+        },
+      );
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -837,19 +851,23 @@ export class AssessmentLayerService {
       for (let i = 0; i < requestLayers.length; i++) {
         const requestLayer = requestLayers[i];
 
-        await this.actionLogRepository.save({
-          action: data.action as ActionEnum,
-          userId: member.id,
-          roleIds: memberRoles.map((r) => r.id),
-          status: ActionLogStatusEnum.SUCCESS,
-          assessmentRequestId: requestLayer.assessmentRequestId,
-          assessmentLayerId: requestLayer.id,
-          assessmentLayerCurrentStateId: requestLayer.stateId,
-          assessmentLayerNextStateId: stateTransition.id,
-          assessmentRequestCurrentStateId:
-            requestLayer.assessmentRequest?.stateId,
-          assessmentRequestNextStateId: nextRequestState,
-        });
+        await this.actionLogBufferService.flushToActionLog(
+          {
+            assessmentRequestId: requestLayer.assessmentRequestId,
+            assessmentLayerId: requestLayer.id,
+          },
+          {
+            userId: member.id,
+            roleIds: memberRoles.map((r) => r.id),
+            action: data.action as ActionEnum,
+            status: ActionLogStatusEnum.SUCCESS,
+            assessmentRequestCurrentStateId:
+              requestLayer.assessmentRequest?.stateId,
+            assessmentRequestNextStateId: nextRequestState,
+            assessmentLayerCurrentStateId: requestLayer.stateId,
+            assessmentLayerNextStateId: stateTransition.id,
+          },
+        );
       }
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -962,18 +980,22 @@ export class AssessmentLayerService {
 
       await queryRunner.commitTransaction();
 
-      await this.actionLogRepository.save({
-        action: data.action as ActionEnum,
-        userId: member.id,
-        roleIds: memberRoles.map((r) => r.id),
-        status: ActionLogStatusEnum.SUCCESS,
-        assessmentRequestId: requestLayer.assessmentRequestId,
-        assessmentLayerId: requestLayer.id,
-        assessmentLayerCurrentStateId: layerCurrentStateId,
-        assessmentLayerNextStateId: stateTransition.id,
-        assessmentRequestCurrentStateId: currentRequestState,
-        assessmentRequestNextStateId: nextRequestState,
-      });
+      await this.actionLogBufferService.flushToActionLog(
+        {
+          assessmentRequestId: requestLayer.assessmentRequestId,
+          assessmentLayerId: requestLayer.id,
+        },
+        {
+          userId: member.id,
+          roleIds: memberRoles.map((r) => r.id),
+          action: data.action as ActionEnum,
+          status: ActionLogStatusEnum.SUCCESS,
+          assessmentRequestCurrentStateId: currentRequestState,
+          assessmentRequestNextStateId: nextRequestState,
+          assessmentLayerCurrentStateId: layerCurrentStateId,
+          assessmentLayerNextStateId: stateTransition.id,
+        },
+      );
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -1064,7 +1086,7 @@ export class AssessmentLayerService {
       }
     }
 
-    const allAccepted = layers.every((layer) =>
+    const allAccepted = layers.every((layer: AssessmentLayer) =>
       expectedStateIds.includes(layer.stateId),
     );
 

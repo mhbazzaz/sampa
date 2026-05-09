@@ -1,4 +1,5 @@
 import { MiddlewareConsumer, Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ActionLogModule } from './action-log/action-log.module';
 import { ActionModule } from './action/action.module';
@@ -29,9 +30,11 @@ import { TestcaseModule } from './test-case/test-case.module';
 @Module({
   imports: [
     TypeOrmModule.forRoot(typeOrmConfig),
+    ScheduleModule.forRoot(),
     LoggerModule,
     AppI18nModule,
     ActionLogModule,
+
     GroupMembershipModule,
     GroupModule,
     AssetModule,

@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
-import { ActionLogRepository } from 'src/action-log/repositories/action-log.repository';
+import { ActionLogBufferService } from 'src/action-log/services/action-log-buffer.service';
 import { ActionRepository } from 'src/action/repositories/action.repository';
 import { AssetService } from 'src/asset/services/asset-to-audit.service';
 import { ActionLogStatusEnum } from 'src/common/enums/action-log.enum';
@@ -72,12 +72,12 @@ export class AssessmentRequestService {
     private readonly memberRepository: MemberRepository,
     private readonly statesRepository: StatesRepository,
     private readonly stateTransitionService: StateTransitionService,
-    private readonly actionLogRepository: ActionLogRepository,
     private readonly requestSpecItemRepository: RequestSpecItemRepository,
     private readonly requestCommentRepository: RequestCommentRepository,
     private readonly stateService: StatesService,
     private readonly i18nService: I18nService,
     private readonly dataSource: DataSource,
+    private readonly actionLogBufferService: ActionLogBufferService,
   ) {}
 
   //------------------------------
@@ -257,36 +257,28 @@ export class AssessmentRequestService {
       }),
     );
 
-    await this.actionLogRepository.save({
-      action:
-        dto.type === 'draft'
-          ? ActionEnum.InitiatedSave
-          : ActionEnum.InitiatedRegister,
-      userId: member.id,
-      roleIds: memberRoles.map((r) => r.id),
-      status: ActionLogStatusEnum.SUCCESS,
+    const initialAction =
+      dto.type === 'draft'
+        ? ActionEnum.InitiatedSave
+        : ActionEnum.InitiatedRegister;
+
+    await this.flushRequestStateActionLog({
+      action: initialAction,
+      member,
+      memberRoles,
       assessmentRequestId: createdRequest.id,
-      assessmentRequestCurrentStateId: null,
-      assessmentRequestNextStateId: createdRequest.stateId,
+      currentStateId: null,
+      nextStateId: createdRequest.stateId,
     });
 
-    for (let i = 0; i < createdLayers.length; i++) {
-      const layer = createdLayers[i];
-
-      await this.actionLogRepository.save({
-        action:
-          dto.type === 'draft'
-            ? ActionEnum.InitiatedSave
-            : ActionEnum.InitiatedRegister,
-        userId: member.id,
-        roleIds: memberRoles.map((r) => r.id),
-        status: ActionLogStatusEnum.SUCCESS,
-        assessmentRequestId: createdRequest.id,
-        assessmentLayerId: layer.id,
-        assessmentLayerCurrentStateId: null,
-        assessmentLayerNextStateId: layer.stateId,
-      });
-    }
+    await this.flushManyLayerStateActionLogs({
+      action: initialAction,
+      member,
+      memberRoles,
+      assessmentRequestId: createdRequest.id,
+      layers: createdLayers,
+      nextLayerStateId: createdLayers[0]?.stateId ?? null,
+    });
 
     return {
       assessmentRequest: createdRequest,
@@ -389,14 +381,13 @@ export class AssessmentRequestService {
     //   { stateId: stateTransition.id },
     // );
 
-    await this.actionLogRepository.save({
+    await this.flushRequestStateActionLog({
       action: data.action,
-      userId: member.id,
-      roleIds: memberRoles.map((r) => r.id),
-      status: ActionLogStatusEnum.SUCCESS,
+      member,
+      memberRoles,
       assessmentRequestId: request.id,
-      assessmentRequestCurrentStateId: currentStateId,
-      assessmentRequestNextStateId: stateTransition.id,
+      currentStateId,
+      nextStateId: stateTransition.id,
     });
 
     return true;
@@ -480,15 +471,14 @@ export class AssessmentRequestService {
             { stateId: stateTransition.id },
           );
 
-          await this.actionLogRepository.save({
+          await this.flushLayerStateActionLog({
             action: ActionEnum.PendingLayerSpecsSubmit,
-            userId: member.id,
-            roleIds: memberRoles.map((r) => r.id),
-            status: ActionLogStatusEnum.SUCCESS,
+            member,
+            memberRoles,
             assessmentRequestId: request.id,
             assessmentLayerId: layer.id,
-            assessmentLayerCurrentStateId: layer.stateId,
-            assessmentLayerNextStateId: stateTransition.id,
+            layerCurrentStateId: layer.stateId,
+            layerNextStateId: stateTransition.id,
           });
 
           anyLayerUpdated = true;
@@ -527,14 +517,13 @@ export class AssessmentRequestService {
       await queryRunner.commitTransaction();
 
       if (requestNextState) {
-        await this.actionLogRepository.save({
+        await this.flushRequestStateActionLog({
           action: ActionEnum.AwaitingSpecsProvideSpecs,
-          userId: member.id,
-          roleIds: memberRoles.map((r) => r.id),
-          status: ActionLogStatusEnum.SUCCESS,
+          member,
+          memberRoles,
           assessmentRequestId: request.id,
-          assessmentRequestCurrentStateId: requestCurrentStateId,
-          assessmentRequestNextStateId: requestNextState,
+          currentStateId: requestCurrentStateId,
+          nextStateId: requestNextState,
         });
       }
       return true;
@@ -791,19 +780,14 @@ export class AssessmentRequestService {
         );
       }
 
-      for (let i = 0; i < layers.length; i++) {
-        const element = layers[i];
-        await this.actionLogRepository.save({
-          action: data.action,
-          userId: member.id,
-          roleIds: memberRoles.map((r) => r.id),
-          status: ActionLogStatusEnum.SUCCESS,
-          assessmentRequestId: request.id,
-          assessmentLayerId: element.id,
-          assessmentLayerCurrentStateId: element.stateId,
-          assessmentLayerNextStateId: stateTransition.id,
-        });
-      }
+      await this.flushManyLayerStateActionLogs({
+        action: data.action,
+        member,
+        memberRoles,
+        assessmentRequestId: request.id,
+        layers,
+        nextLayerStateId: stateTransition.id,
+      });
     }
 
     if (data.action === ActionEnum.StatusReportedFinalize) {
@@ -855,19 +839,14 @@ export class AssessmentRequestService {
         );
       }
 
-      for (let i = 0; i < layers.length; i++) {
-        const element = layers[i];
-        await this.actionLogRepository.save({
-          action: data.action,
-          userId: member.id,
-          roleIds: memberRoles.map((r) => r.id),
-          status: ActionLogStatusEnum.SUCCESS,
-          assessmentRequestId: request.id,
-          assessmentLayerId: element.id,
-          assessmentLayerCurrentStateId: element.stateId,
-          assessmentLayerNextStateId: stateTransition.id,
-        });
-      }
+      await this.flushManyLayerStateActionLogs({
+        action: data.action,
+        member,
+        memberRoles,
+        assessmentRequestId: request.id,
+        layers,
+        nextLayerStateId: stateTransition.id,
+      });
     }
 
     if (data.action === ActionEnum.LayerReportIssuedRemark) {
@@ -919,19 +898,14 @@ export class AssessmentRequestService {
         );
       }
 
-      for (let i = 0; i < layers.length; i++) {
-        const element = layers[i];
-        await this.actionLogRepository.save({
-          action: data.action,
-          userId: member.id,
-          roleIds: memberRoles.map((r) => r.id),
-          status: ActionLogStatusEnum.SUCCESS,
-          assessmentRequestId: request.id,
-          assessmentLayerId: element.id,
-          assessmentLayerCurrentStateId: element.stateId,
-          assessmentLayerNextStateId: stateTransition.id,
-        });
-      }
+      await this.flushManyLayerStateActionLogs({
+        action: data.action,
+        member,
+        memberRoles,
+        assessmentRequestId: request.id,
+        layers,
+        nextLayerStateId: stateTransition.id,
+      });
     }
 
     if (data.action === ActionEnum.StatusReportedNeedChanges) {
@@ -983,19 +957,14 @@ export class AssessmentRequestService {
         );
       }
 
-      for (let i = 0; i < layers.length; i++) {
-        const element = layers[i];
-        await this.actionLogRepository.save({
-          action: data.action,
-          userId: member.id,
-          roleIds: memberRoles.map((r) => r.id),
-          status: ActionLogStatusEnum.SUCCESS,
-          assessmentRequestId: request.id,
-          assessmentLayerId: element.id,
-          assessmentLayerCurrentStateId: element.stateId,
-          assessmentLayerNextStateId: stateTransition.id,
-        });
-      }
+      await this.flushManyLayerStateActionLogs({
+        action: data.action,
+        member,
+        memberRoles,
+        assessmentRequestId: request.id,
+        layers,
+        nextLayerStateId: stateTransition.id,
+      });
     }
 
     if (data.action === ActionEnum.LayerReportIssuedRefer) {
@@ -1047,19 +1016,14 @@ export class AssessmentRequestService {
         );
       }
 
-      for (let i = 0; i < layers.length; i++) {
-        const element = layers[i];
-        await this.actionLogRepository.save({
-          action: data.action,
-          userId: member.id,
-          roleIds: memberRoles.map((r) => r.id),
-          status: ActionLogStatusEnum.SUCCESS,
-          assessmentRequestId: request.id,
-          assessmentLayerId: element.id,
-          assessmentLayerCurrentStateId: element.stateId,
-          assessmentLayerNextStateId: stateTransition.id,
-        });
-      }
+      await this.flushManyLayerStateActionLogs({
+        action: data.action,
+        member,
+        memberRoles,
+        assessmentRequestId: request.id,
+        layers,
+        nextLayerStateId: stateTransition.id,
+      });
     }
 
     if (data.action === ActionEnum.RemediateLayerVulnerabilitiesDecline) {
@@ -1111,19 +1075,14 @@ export class AssessmentRequestService {
         );
       }
 
-      for (let i = 0; i < layers.length; i++) {
-        const element = layers[i];
-        await this.actionLogRepository.save({
-          action: data.action,
-          userId: member.id,
-          roleIds: memberRoles.map((r) => r.id),
-          status: ActionLogStatusEnum.SUCCESS,
-          assessmentRequestId: request.id,
-          assessmentLayerId: element.id,
-          assessmentLayerCurrentStateId: element.stateId,
-          assessmentLayerNextStateId: stateTransition.id,
-        });
-      }
+      await this.flushManyLayerStateActionLogs({
+        action: data.action,
+        member,
+        memberRoles,
+        assessmentRequestId: request.id,
+        layers,
+        nextLayerStateId: stateTransition.id,
+      });
     }
 
     if (data.action === ActionEnum.RemediateLayerVulnerabilitiesFinalize) {
@@ -1175,19 +1134,14 @@ export class AssessmentRequestService {
         );
       }
 
-      for (let i = 0; i < layers.length; i++) {
-        const element = layers[i];
-        await this.actionLogRepository.save({
-          action: data.action,
-          userId: member.id,
-          roleIds: memberRoles.map((r) => r.id),
-          status: ActionLogStatusEnum.SUCCESS,
-          assessmentRequestId: request.id,
-          assessmentLayerId: element.id,
-          assessmentLayerCurrentStateId: element.stateId,
-          assessmentLayerNextStateId: stateTransition.id,
-        });
-      }
+      await this.flushManyLayerStateActionLogs({
+        action: data.action,
+        member,
+        memberRoles,
+        assessmentRequestId: request.id,
+        layers,
+        nextLayerStateId: stateTransition.id,
+      });
     }
 
     if (data.action === ActionEnum.ReviewLayerRemediatesReject) {
@@ -1239,19 +1193,14 @@ export class AssessmentRequestService {
         );
       }
 
-      for (let i = 0; i < layers.length; i++) {
-        const element = layers[i];
-        await this.actionLogRepository.save({
-          action: data.action,
-          userId: member.id,
-          roleIds: memberRoles.map((r) => r.id),
-          status: ActionLogStatusEnum.SUCCESS,
-          assessmentRequestId: request.id,
-          assessmentLayerId: element.id,
-          assessmentLayerCurrentStateId: element.stateId,
-          assessmentLayerNextStateId: stateTransition.id,
-        });
-      }
+      await this.flushManyLayerStateActionLogs({
+        action: data.action,
+        member,
+        memberRoles,
+        assessmentRequestId: request.id,
+        layers,
+        nextLayerStateId: stateTransition.id,
+      });
     }
 
     if (data.action === ActionEnum.ReviewLayerRemediatesApprove) {
@@ -1303,29 +1252,23 @@ export class AssessmentRequestService {
         );
       }
 
-      for (let i = 0; i < layers.length; i++) {
-        const element = layers[i];
-        await this.actionLogRepository.save({
-          action: data.action,
-          userId: member.id,
-          roleIds: memberRoles.map((r) => r.id),
-          status: ActionLogStatusEnum.SUCCESS,
-          assessmentRequestId: request.id,
-          assessmentLayerId: element.id,
-          assessmentLayerCurrentStateId: element.stateId,
-          assessmentLayerNextStateId: stateTransition.id,
-        });
-      }
+      await this.flushManyLayerStateActionLogs({
+        action: data.action,
+        member,
+        memberRoles,
+        assessmentRequestId: request.id,
+        layers,
+        nextLayerStateId: stateTransition.id,
+      });
     }
 
-    await this.actionLogRepository.save({
+    await this.flushRequestStateActionLog({
       action: data.action,
-      userId: member.id,
-      roleIds: memberRoles.map((r) => r.id),
-      status: ActionLogStatusEnum.SUCCESS,
+      member,
+      memberRoles,
       assessmentRequestId: request.id,
-      assessmentRequestCurrentStateId: request.stateId,
-      assessmentRequestNextStateId: stateTransition.id,
+      currentStateId: request.stateId,
+      nextStateId: stateTransition.id,
     });
 
     return true;
@@ -1862,20 +1805,99 @@ export class AssessmentRequestService {
       // Adding comment for the request
       await queryRunner.commitTransaction();
 
-      await this.actionLogRepository.save({
+      await this.flushRequestStateActionLog({
         action: ActionEnum.StatusReportedFinalize,
-        userId: member.id,
-        roleIds: memberRoles.map((r) => r.id),
-        status: ActionLogStatusEnum.SUCCESS,
+        member,
+        memberRoles,
         assessmentRequestId: request.id,
-        assessmentRequestCurrentStateId: requestCurrentStateId,
-        assessmentRequestNextStateId: stateTransition.id,
+        currentStateId: requestCurrentStateId,
+        nextStateId: stateTransition.id,
       });
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
     } finally {
       await queryRunner.release();
+    }
+  }
+
+  //------------------------------
+  private async flushRequestStateActionLog(input: {
+    action: ActionEnum;
+    member: Member;
+    memberRoles: Role[];
+    assessmentRequestId: string;
+    currentStateId?: string | null;
+    nextStateId?: string | null;
+  }) {
+    await this.actionLogBufferService.flushToActionLog(
+      { assessmentRequestId: input.assessmentRequestId },
+      {
+        userId: input.member.id,
+        roleIds: input.memberRoles.map((role) => role.id),
+        action: input.action,
+        status: ActionLogStatusEnum.SUCCESS,
+        assessmentRequestCurrentStateId: input.currentStateId ?? null,
+        assessmentRequestNextStateId: input.nextStateId ?? null,
+        assessmentLayerCurrentStateId: null,
+        assessmentLayerNextStateId: null,
+      },
+    );
+  }
+
+  //------------------------------
+  private async flushLayerStateActionLog(input: {
+    action: ActionEnum;
+    member: Member;
+    memberRoles: Role[];
+    assessmentRequestId: string;
+    assessmentLayerId: string;
+    layerCurrentStateId?: string | null;
+    layerNextStateId?: string | null;
+    requestCurrentStateId?: string | null;
+    requestNextStateId?: string | null;
+  }) {
+    await this.actionLogBufferService.flushToActionLog(
+      {
+        assessmentRequestId: input.assessmentRequestId,
+        assessmentLayerId: input.assessmentLayerId,
+      },
+      {
+        userId: input.member.id,
+        roleIds: input.memberRoles.map((role) => role.id),
+        action: input.action,
+        status: ActionLogStatusEnum.SUCCESS,
+        assessmentRequestCurrentStateId: input.requestCurrentStateId ?? null,
+        assessmentRequestNextStateId: input.requestNextStateId ?? null,
+        assessmentLayerCurrentStateId: input.layerCurrentStateId ?? null,
+        assessmentLayerNextStateId: input.layerNextStateId ?? null,
+      },
+    );
+  }
+
+  //------------------------------
+  private async flushManyLayerStateActionLogs(input: {
+    action: ActionEnum;
+    member: Member;
+    memberRoles: Role[];
+    assessmentRequestId: string;
+    layers: { id: string; stateId: string }[];
+    nextLayerStateId?: string | null;
+    requestCurrentStateId?: string | null;
+    requestNextStateId?: string | null;
+  }) {
+    for (const layer of input.layers) {
+      await this.flushLayerStateActionLog({
+        action: input.action,
+        member: input.member,
+        memberRoles: input.memberRoles,
+        assessmentRequestId: input.assessmentRequestId,
+        assessmentLayerId: layer.id,
+        layerCurrentStateId: layer.stateId,
+        layerNextStateId: input.nextLayerStateId ?? null,
+        requestCurrentStateId: input.requestCurrentStateId ?? null,
+        requestNextStateId: input.requestNextStateId ?? null,
+      });
     }
   }
 }

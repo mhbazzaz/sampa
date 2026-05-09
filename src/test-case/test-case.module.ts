@@ -1,5 +1,6 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ActionLogModule } from 'src/action-log/action-log.module';
 import { AssessmentModule } from 'src/assessment/assessment.module';
 import { AssetModule } from 'src/asset/asset.module';
 import { CheckTestcaseGroupExistValidator } from 'src/common/validations/check-test-case-group-exists.validator';
@@ -20,6 +21,7 @@ import { TestcaseItemService } from './services/test-case-item.service';
 @Module({
   imports: [
     TypeOrmModule.forFeature([TestcaseContent, TestcaseGroup, TestcaseItem]),
+    ActionLogModule,
     forwardRef(() => EnvironmentModule),
     forwardRef(() => AssessmentModule),
     AssetModule,
