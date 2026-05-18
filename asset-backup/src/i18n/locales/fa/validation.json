@@ -1,0 +1,15 @@
+{
+  "IsNotEmpty": "$t(objects.{property}) الزامی است",
+  "IsString": "$t(objects.{property}) باید string باشد",
+  "IsStringEach": "تمام $t(objects.{property}) باید string باشد",
+  "IsEmail": "$t(objects.{property}) ایمیل صحیح نمی‌باشد",
+  "MinLength": "$t(objects.{property}) باید حداقل {{constraints.0}} کاراکتر باشد",
+  "MaxLength": "$t(objects.{property}) نباید بیشتر از {{constraints.0}} کاراکتر باشد",
+  "IsArray": "$t(objects.{property}) باید آرایه باشد",
+  "IsNumber": "$t(objects.{property}) باید عدد باشد",
+  "IsUUID": "$t(objects.{property}) باید UUID باشد",
+  "IsBoolean": "$t(objects.{property}) باید boolean باشد",
+  "IsUUIDEach": "تمام $t(objects.{property}) باید uuid باشد",
+  "IsObject": "$t(objects.{property}) باید object باشد",
+  "IsUnique": "$t(objects.{property}) تکراری است"
+}

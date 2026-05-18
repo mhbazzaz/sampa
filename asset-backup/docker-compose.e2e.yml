@@ -1,0 +1,46 @@
+services:
+  db:
+    image: docker.secuscope.iranet.net/postgres:16.3-alpine3.20
+    restart: always
+    environment:
+      - POSTGRES_USER=$DATABASE_USERNAME
+      - POSTGRES_PASSWORD=$DATABASE_PASSWORD
+      - POSTGRES_DB=$DATABASE_NAME
+    container_name: asset-postgres
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "sh -c 'pg_isready -U ${DATABASE_USERNAME} -d ${DATABASE_NAME}'",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      options:
+        max-size: 5m
+    networks:
+      - asset-test
+
+  app:
+    image: docker.secuscope.iranet.net/asset-server:latest
+    container_name: asset-nest
+    command: sh -c "npm run test:migration:run && npm run test:seed && npm run test:e2e"
+    volumes:
+      - .env.test.local:/app/.env.test.local
+    depends_on:
+      db:
+        condition: service_healthy
+    logging:
+      options:
+        max-size: 5m
+    networks:
+      - asset-test
+
+networks:
+  asset-test:
+    name: asset-test
+    driver: bridge
+
+volumes:
+  postgres:

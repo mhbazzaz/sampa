@@ -1,0 +1,15 @@
+{
+  "IsNotEmpty": "{property} is required",
+  "IsString": "{property} must be a string",
+  "IsStringEach": "each of {property} must be a string",
+  "IsEmail": "{property} must be a valid email address",
+  "MinLength": "{property} must be at least {{constraints.0}} characters long",
+  "MaxLength": "{property} must be no longer than {{constraints.0}} characters",
+  "IsArray": "{property} must be an array",
+  "IsNumber": "{property} must be a number",
+  "IsUUID": "{property} must be an uuid",
+  "IsBoolean": "{property} must be a boolean",
+  "IsUUIDEach": "each of {property} must be a uuid",
+  "IsObject": "{property} must be an object",
+  "IsUnique": "{property} already exists"
+}

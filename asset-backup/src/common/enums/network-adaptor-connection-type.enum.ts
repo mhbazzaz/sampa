@@ -1,0 +1,15 @@
+export enum NetworkAdaptorConnectionType {
+  ETHERNET = 'Ethernet',
+  WIFI = 'WiFi',
+  MOBILE_DATA = 'MobileData',
+  VPN = 'VPN',
+  BLUETOOTH = 'Bluetooth',
+  USB_TETHERING = 'USB Tethering',
+  FIBER_OPTIC = 'FiberOptic',
+  POWERLINE = 'Powerline',
+  SATELLITE = 'Satellite',
+  INFRARED = 'Infrared',
+  NFC = 'NFC',
+  LORA = 'LoRa',
+  ZIGBEE = 'Zigbee',
+}

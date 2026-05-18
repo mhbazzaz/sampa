@@ -1,0 +1,124 @@
+import { NotFoundException } from '@nestjs/common';
+import { I18nService } from 'nestjs-i18n';
+import {
+  DeepPartial,
+  FindManyOptions,
+  FindOneOptions,
+  FindOptionsOrder,
+  FindOptionsRelations,
+  FindOptionsSelect,
+  FindOptionsWhere,
+  ObjectLiteral,
+  Repository,
+  UpdateResult,
+} from 'typeorm';
+
+export abstract class AbstractRepository<T extends ObjectLiteral> {
+  constructor(
+    private readonly entityRepository: Repository<T>,
+    private readonly i18n: I18nService,
+  ) {}
+
+  //------------------------------
+  async save(entity: DeepPartial<T>): Promise<T> {
+    return this.entityRepository.save(entity);
+  }
+
+  //------------------------------
+  async saveMany(entity: DeepPartial<T>[]): Promise<T[]> {
+    return this.entityRepository.save(entity);
+  }
+
+  //------------------------------
+  async deleteMany(entity: string[]): Promise<UpdateResult> {
+    return this.entityRepository.softDelete(entity);
+  }
+
+  //------------------------------
+  async update(
+    data: FindOptionsWhere<T>,
+    updateUserDto: Partial<T>,
+  ): Promise<T> {
+    let record = await this.findOne({ where: data });
+    if (!record)
+      throw new NotFoundException(
+        this.i18n.t('messages.ERROR_NOT_FOUND_RECORD'),
+      );
+
+    record = { ...record, ...updateUserDto };
+    return this.save(record);
+  }
+
+  //------------------------------
+  async findOne(data: FindOneOptions<T>): Promise<T | null> {
+    return this.entityRepository.findOne(data);
+  }
+
+  //------------------------------
+  async findOneBy(data: FindOptionsWhere<T>): Promise<T | null> {
+    return this.entityRepository.findOneBy(data);
+  }
+
+  //------------------------------
+  async find(where: FindOptionsWhere<T>): Promise<T[]> {
+    return this.entityRepository.findBy(where);
+  }
+
+  //------------------------------
+  async findAll(options?: FindManyOptions<T>): Promise<T[]> {
+    return this.entityRepository.find(options);
+  }
+
+  //------------------------------
+  async findAndDelete(where: FindOptionsWhere<T>) {
+    return this.entityRepository.softDelete(where);
+  }
+
+  //------------------------------
+  async recover(entities: DeepPartial<T>[]) {
+    return this.entityRepository.recover(entities);
+  }
+
+  //------------------------------
+  async findAllPagination(
+    skip: number,
+    take: number,
+    {
+      where,
+      relations,
+      order,
+      select,
+    }: {
+      where?: FindOptionsWhere<T>;
+      relations?: FindOptionsRelations<T>;
+      select?: FindOptionsSelect<T>;
+      order: FindOptionsOrder<T>;
+    },
+  ): Promise<[T[], number]> {
+    return this.entityRepository.findAndCount({
+      where,
+      skip,
+      take,
+      relations,
+      order,
+      select,
+    });
+  }
+
+  //------------------------------
+  async findAllFiltered({
+    where,
+    relations,
+    order,
+  }: {
+    where?: FindOptionsWhere<T> | FindOptionsWhere<T>[];
+    relations?: FindOptionsRelations<T>;
+    order: FindOptionsOrder<T>;
+  }): Promise<T[]> {
+    return this.entityRepository.find({
+      where,
+      relations,
+      order,
+    });
+  }
+}

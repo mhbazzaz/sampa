@@ -1,0 +1,17 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "NestJS Debug",
+      "type": "node",
+      "request": "launch",
+      "runtimeArgs": ["--nolazy", "-r", "ts-node/register"],
+      "args": ["${workspaceFolder}/src/main.ts"],
+      "autoAttachChildProcesses": true,
+      "sourceMaps": true,
+      "cwd": "${workspaceFolder}",
+      "restart": true,
+      "console": "integratedTerminal"
+    }
+  ]
+}
