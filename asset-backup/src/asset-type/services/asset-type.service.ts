@@ -16,6 +16,7 @@ import { LocationType } from 'src/location-type/entities/location-type.entity';
 import { User } from 'src/users/entities/user.entity';
 import { Vault } from 'src/vault/vault';
 import { FindOneOptions, In } from 'typeorm';
+import { v4 as uuidv4 } from 'uuid';
 import { CreateAssetTypeDto } from '../dto/input/create-asset-type.dto';
 import { FindAllAssetTypeQueryUserScopeDto } from '../dto/input/find-all-asset-type-query-user-scope.dto';
 import { FindAllAssetTypeQueryDto } from '../dto/input/find-all-asset-type-query.dto';
@@ -81,6 +82,7 @@ export class AssetTypeService {
       });
     }
 
+    this.syncEventIdentifiers(data.content);
     const assetTypeVersion = await this.assetTypeVersionRepository.save({
       assetTypeId: assetType.id,
       content: JSON.stringify(data.content),
@@ -277,6 +279,8 @@ export class AssetTypeService {
 
     let isSameContent = true;
     if (content !== undefined) {
+      this.syncEventIdentifiers(content);
+
       const oldContentObj = latestVersion.content
         ? JSON.parse(latestVersion.content)
         : {};
@@ -401,6 +405,83 @@ export class AssetTypeService {
       assetType: savedAssetType,
       assetTypeVersion: savedAssetTypeVersion,
     };
+  }
+
+  //------------------------------
+  private searchIdentifierInSchema(schema: any, identifier: string): boolean {
+    if (!schema || typeof schema !== 'object') {
+      return false;
+    }
+
+    if (schema.metadata?.identifier === identifier) {
+      return true;
+    }
+
+    if (schema.properties?.[identifier]) {
+      return true;
+    }
+
+    for (const key of Object.keys(schema)) {
+      const value = schema[key];
+
+      if (Array.isArray(value)) {
+        if (
+          value.some((item) => this.searchIdentifierInSchema(item, identifier))
+        ) {
+          return true;
+        }
+      } else if (typeof value === 'object' && value !== null) {
+        if (this.searchIdentifierInSchema(value, identifier)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  //------------------------------
+  async findByIdentifier(identifier: string): Promise<AssetType[]> {
+    const versions = await this.assetTypeVersionRepository.findAllFiltered({
+      where: {
+        archived: false,
+      },
+      relations: {
+        assetType: {
+          assetCategory: true,
+        },
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+
+    const matchedAssetTypes: AssetType[] = [];
+
+    for (const version of versions) {
+      try {
+        const schema = JSON.parse(version.content);
+        const found = this.searchIdentifierInSchema(schema, identifier);
+
+        if (found && version.assetType) {
+          const cleanVersion = {
+            ...version,
+            assetType: undefined,
+          };
+
+          const cleanAssetType = {
+            ...version.assetType,
+            assetTypeVersions: [cleanVersion],
+          } as AssetType;
+
+          matchedAssetTypes.push(cleanAssetType);
+        }
+      } catch (error) {
+        console.error(`Failed parsing schema for version ${version.id}`, error);
+      }
+    }
+
+    return matchedAssetTypes;
   }
 
   //------------------------------
@@ -1022,5 +1103,44 @@ export class AssetTypeService {
     }
 
     return true;
+  }
+
+  //------------------------------
+  private syncEventIdentifiers(schema: any): void {
+    if (!schema || typeof schema !== 'object') {
+      return;
+    }
+
+    if (schema.metadata && typeof schema.metadata === 'object') {
+      const hasEventType = !!schema.metadata.eventType;
+
+      if (hasEventType) {
+        if (!schema.metadata.identifier) {
+          schema.metadata.identifier = uuidv4();
+        }
+      } else {
+        if (schema.metadata.identifier) {
+          delete schema.metadata.identifier;
+        }
+      }
+    }
+
+    if (schema.type === 'object' && schema.properties) {
+      Object.values(schema.properties).forEach((property: any) => {
+        this.syncEventIdentifiers(property);
+      });
+    }
+
+    if (schema.type === 'array' && schema.items) {
+      this.syncEventIdentifiers(schema.items);
+    }
+
+    ['allOf', 'oneOf', 'anyOf'].forEach((key) => {
+      if (Array.isArray(schema[key])) {
+        schema[key].forEach((item: any) => {
+          this.syncEventIdentifiers(item);
+        });
+      }
+    });
   }
 }

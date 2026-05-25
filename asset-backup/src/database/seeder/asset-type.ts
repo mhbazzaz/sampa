@@ -178,8 +178,6 @@ const assetTypes: {
       version: 1,
     },
   },
-
-  //=================================================
   {
     id: 'a4f9e2cb-b2e1-46ee-8137-3ff269c0d707',
     code: 'SWL',
@@ -193,10 +191,9 @@ const assetTypes: {
         '{"$schema":"http://json-schema.org/schema#","title":"Software License","type":"object","properties":{"LicenseType":{"type":"string","minLength":1,"enum":["Perpetual","SubscriptionBased","OpenSource"]},"AtivationCode":{"type":"string","description":"Code used to activate the software"},"StartDate":{"type":"string","format":"date","description":"License start date"},"ExpirationDate":{"type":"string","format":"date","description":"License expiration date"},"AuthorizedUsersOrDevices":{"type":"integer","description":"Number of users or devices allowed under the license"},"UsageLocation":{"type":"string","description":"Location or branch using the license"},"SoftwareName":{"type":"string","description":"Name of the software or product covered by the license"},"LicenseDetails":{"type":"string","description":"Additional details about the license type and features"},"RenewalOrReviewDate":{"type":"string","format":"date","description":"Dates when the license needs renewal or review","metadata":{"eventType":"key_end_of_life_email"}},"SupportLevel":{"type":"string","enum":["24/7","Email","Phone"],"description":"Support level provided"},"LicenseProvider":{"type":"string","description":"Company or individual who issued the license"},"GeographicalRestrictions":{"type":"string","description":"Geographic locations where the license is valid"},"AdditionalModulesLicense":{"type":"string","description":"Modules or features covered under this license"},"LicenseCost":{"type":"integer","description":"Cost of the license or renewal"},"ActivationStatus":{"type":"string","enum":["Active","Inactive","Expired"],"description":"Current status of the license"},"RefundOrCancellationPolicy":{"type":"string","description":"Refund or cancellation terms"},"LicenseOwner":{"type":"string","description":"Individual or organization owning the license"},"ContractType":{"type":"string","enum":["SaaS","OnPremises"],"description":"Type of contract related to the license"},"ConcurrentLicenses":{"type":"integer","description":"Number of users allowed to use the license concurrently"},"PurchaseDate":{"type":"string","format":"date","description":"Date of purchase or acquisition of the license"},"LicenseDuration":{"type":"integer","description":"Duration of the license in years"},"SupportContactDetails":{"type":"string","description":"Contact information for technical support or license renewal"},"TermsAndConditions":{"type":"string","description":"Terms and conditions related to the license"},"SoftwareVersion":{"type":"string","description":"Software version for which the license is valid"},"AttachedDocuments":{"type":"array","items":{"type":"string","description":"URLs or file paths to related documents like PDFs or contracts"}}},"required":["LicenseType"]}',
       archived: false,
       hasLocation: false,
-      version: 3, // fix it
+      version: 1,
     },
   },
-
   {
     id: 'c2e5e2e5-b664-4f4d-bf6f-22592b0bd129',
     code: 'ENK',
@@ -210,10 +207,9 @@ const assetTypes: {
         '{"$schema":"http://json-schema.org/schema#","title":"Encryption Key","type":"object","properties":{"KeyName":{"type":"string","description":"Unique name or identifier of the encryption key"},"KeyType":{"type":"string","enum":["Symmetric","Asymmetric"],"description":"Type of encryption key"},"EncryptionAlgorithm":{"type":"string","enum":["AES","RSA","ECC","DES","3DES","Blowfish","ChaCha20"],"description":"Encryption algorithm used"},"KeyLength":{"type":"integer","description":"Length of the encryption key in bits"},"KeyGenerationDate":{"type":"string","format":"date","description":"Date when the encryption key was generated"},"ValidityStartDate":{"type":"string","format":"date","description":"Start date of the key validity period"},"ValidityEndDate":{"type":"string","format":"date","description":"End date of the key validity period","metadata":{"eventType":"expiration_license_sms"}},"KeyStatus":{"type":"string","enum":["Active","Inactive","Expired","Revoked","Compromised"],"description":"Current status of the encryption key"},"KeyUsage":{"type":"string","enum":["Encryption","Decryption","Signing","Verification","KeyExchange"],"description":"Purpose of the encryption key"},"BackupAvailable":{"type":"boolean","description":"Indicates whether a backup of the key exists"},"Description":{"type":"string","description":"Additional details about the encryption key"}},"required":["KeyName","KeyType","EncryptionAlgorithm","KeyLength","KeyGenerationDate","ValidityStartDate","ValidityEndDate","KeyStatus","KeyUsage"]}',
       archived: false,
       hasLocation: false,
-      version: 6, // fix it
+      version: 1,
     },
   },
-  //=================================================
 ];
 
 export const AssetTypeSeeder = async (datasource: DataSource) => {

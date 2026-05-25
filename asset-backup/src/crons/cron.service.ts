@@ -16,7 +16,7 @@ export class CronService {
   }
 
   //------------------------------
-  @Cron(CronExpression.EVERY_DAY_AT_2AM)
+  @Cron(CronExpression.MONDAY_TO_FRIDAY_AT_11PM)
   async handleCron() {
     try {
       this.logger.log('Running Cleanup Job At 2:00 AM...');

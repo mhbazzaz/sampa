@@ -349,4 +349,26 @@ export class AssetTypeController {
       data: result,
     });
   }
+
+  //------------------------------
+  @ApiOperation({
+    summary: 'Search Asset Types by Schema Identifier',
+    description:
+      'Find all asset types whose schema contains a specific identifier at any depth',
+  })
+  @ApiBearerAuth('accessToken')
+  @UseGuards(AuthorizationGuard)
+  @UseGuards(UserGuard)
+  @Action(ActionEnum.Read)
+  @Process(ProcessEnum.AssetManagement)
+  @ApiTags('Asset-Type')
+  @Get('asset-type/search/by-identifier/:identifier')
+  async searchByIdentifier(@Param('identifier') identifier: string) {
+    const result = await this.assetTypeService.findByIdentifier(identifier);
+    return responseGenerator({
+      statusCode: 200,
+      message: 'successful',
+      data: result,
+    });
+  }
 }

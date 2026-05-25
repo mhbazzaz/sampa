@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { AssetTypeVersionRepository } from '../repositories/asset-type-version.repository';
 import { I18nService } from 'nestjs-i18n';
+import { AssetTypeVersionRepository } from '../repositories/asset-type-version.repository';
 
 @Injectable()
 export class AssetTypeVersionService {

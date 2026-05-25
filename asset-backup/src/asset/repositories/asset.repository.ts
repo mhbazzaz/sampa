@@ -214,13 +214,17 @@ export class AssetRepository extends AbstractRepository<Asset> {
       integrityScore,
       availabilityScore,
     } = data;
+
     const queryRunner = this.dataSource.createQueryRunner();
 
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
+    let createdAsset: Asset;
+    let createdAssetVersion: AssetVersion;
+
     try {
-      const createdAsset = await queryRunner.manager.save(
+      createdAsset = await queryRunner.manager.save(
         Asset,
         new Asset({
           referenceId: refId,
@@ -237,32 +241,31 @@ export class AssetRepository extends AbstractRepository<Asset> {
         });
 
       const scores = {
-        financialScore: financialScore ? financialScore : 0,
-        reputationScore: reputationScore ? reputationScore : 0,
-        confidentialityScore: confidentialityScore ? confidentialityScore : 0,
-        integrityScore: integrityScore ? integrityScore : 0,
-        availabilityScore: availabilityScore ? availabilityScore : 0,
+        financialScore: financialScore ?? 0,
+        reputationScore: reputationScore ?? 0,
+        confidentialityScore: confidentialityScore ?? 0,
+        integrityScore: integrityScore ?? 0,
+        availabilityScore: availabilityScore ?? 0,
       };
 
       const Financial = assetScoringFactories.find(
-        (assetScoringFactor) => assetScoringFactor.title === 'Financial',
+        (x) => x.title === 'Financial',
       );
 
       const Integrity = assetScoringFactories.find(
-        (assetScoringFactor) => assetScoringFactor.title === 'Integrity',
+        (x) => x.title === 'Integrity',
       );
 
       const Confidentiality = assetScoringFactories.find(
-        (assetScoringFactor) => assetScoringFactor.title === 'Confidentiality',
+        (x) => x.title === 'Confidentiality',
       );
 
       const Reputation = assetScoringFactories.find(
-        (assetScoringFactor) =>
-          assetScoringFactor.title === 'Reputation / Regulatory',
+        (x) => x.title === 'Reputation / Regulatory',
       );
 
       const Availability = assetScoringFactories.find(
-        (assetScoringFactor) => assetScoringFactor.title === 'Availability',
+        (x) => x.title === 'Availability',
       );
 
       if (
@@ -272,7 +275,7 @@ export class AssetRepository extends AbstractRepository<Asset> {
         !Reputation ||
         !Availability
       ) {
-        throw new InternalServerErrorException('');
+        throw new InternalServerErrorException('Asset scoring factors missing');
       }
 
       const evaluationScore =
@@ -282,87 +285,101 @@ export class AssetRepository extends AbstractRepository<Asset> {
         scores.integrityScore * Integrity.weight +
         scores.reputationScore * Reputation.weight;
 
-      const createdAssetVersion = await queryRunner.manager.save(
+      createdAssetVersion = await queryRunner.manager.save(
         AssetVersion,
         new AssetVersion({
           baseline: '1',
           locationId: data.locationId,
           content: JSON.stringify(content),
-          accountableUnitId: accountableUnitId,
-          accountableId: accountableId,
+          accountableUnitId,
+          accountableId,
           editorId,
           editorUnitId,
           assetId: createdAsset.id,
           assetTypeVersionId: assetTypeVersion.id,
           ...scores,
-          evaluationScore: evaluationScore,
+          evaluationScore,
           updateUserId: user.id,
         }),
       );
 
-      if (!createdAsset)
-        throw new InternalServerErrorException('Error during creating asset');
-
       const assetRelations = children.map((child) => {
-        const _child = relatedAssets.find(
-          (item) => item.id === child.assetTypeVersionId,
+        const relation = relatedAssets.find(
+          (x) => x.id === child.assetTypeVersionId,
         );
 
-        if (!_child) {
-          throw new BadRequestException({
-            message: this.i18nService.t('messages.ERROR_NOT_FOUND_RECORD'),
-          });
+        if (!relation) {
+          throw new BadRequestException(
+            this.i18nService.t('messages.ERROR_NOT_FOUND_RECORD'),
+          );
         }
 
         return new AssetRelation({
-          assetRelationTypeId: _child.assetRelationType!.id,
+          assetRelationTypeId: relation.assetRelationType!.id,
           parentId: createdAssetVersion.id,
           childId: child.id,
         });
       });
 
-      try {
-        await ElasticsearchClient.instance.client.index({
-          index: 'assets',
-          id: createdAssetVersion.id,
-          body: {
-            ...content,
-            referenceId: refId,
-            baseline: '1',
-            locationId: data.locationId,
-            name,
-            assetTypeVersionId: assetTypeVersion.id,
-            tags,
-            externalRefId,
-            accountableUnitId: accountableUnitId,
-            accountableId: accountableId,
-            editorId,
-            editorUnitId,
-            archived: false,
-            content: undefined,
-          },
-        });
-        await ElasticsearchClient.instance.client.indices.refresh({
-          index: 'assets',
-        });
-      } catch (error) {
-        console.log(error);
+      if (assetRelations.length > 0) {
+        await queryRunner.manager.save(assetRelations);
       }
 
-      await queryRunner.manager.save(assetRelations);
-
       await queryRunner.commitTransaction();
-      return createdAsset;
     } catch (error) {
       await queryRunner.rollbackTransaction();
+
       throw new InternalServerErrorException(
         `Transaction failed: ${error.message}`,
       );
     } finally {
       await queryRunner.release();
     }
-  }
 
+    // Elastic indexing AFTER commit
+    try {
+      await ElasticsearchClient.instance.client.index({
+        index: this.elasticIndex,
+        id: createdAssetVersion.id,
+        refresh: true,
+        document: {
+          ...content,
+
+          // AssetVersion
+          id: createdAssetVersion.id,
+          baseline: createdAssetVersion.baseline,
+          version: createdAssetVersion.version,
+          locationId: createdAssetVersion.locationId,
+          assetTypeVersionId: createdAssetVersion.assetTypeVersionId,
+          accountableUnitId,
+          accountableId,
+          editorId,
+          editorUnitId,
+          archived: false,
+          updateUserId: user.id,
+
+          financialScore: scores.financialScore,
+          reputationScore: scores.reputationScore,
+          confidentialityScore: scores.confidentialityScore,
+          integrityScore: scores.integrityScore,
+          availabilityScore: scores.availabilityScore,
+          evaluationScore: createdAssetVersion.evaluationScore,
+
+          // Asset
+          assetId: createdAsset.id,
+          referenceId: refId,
+          name,
+          externalRefId,
+
+          tags,
+        },
+      });
+    } catch (error) {
+      console.log('Elastic sync failed', createdAssetVersion.id, error);
+    }
+
+    return createdAsset;
+  }
   //------------------------------
   async currentUserAssets(user: User, assetTypeId: string) {
     return this.assetRepository
