@@ -325,27 +325,13 @@ export class AssetRepository extends AbstractRepository<Asset> {
         await queryRunner.manager.save(assetRelations);
       }
 
-      await queryRunner.commitTransaction();
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-
-      throw new InternalServerErrorException(
-        `Transaction failed: ${error.message}`,
-      );
-    } finally {
-      await queryRunner.release();
-    }
-
-    // Elastic indexing AFTER commit
-    try {
+      // Elastic indexing BEFORE commit to ensure consistency
       await ElasticsearchClient.instance.client.index({
-        index: this.elasticIndex,
+        index: 'assets',
         id: createdAssetVersion.id,
         refresh: true,
         document: {
           ...content,
-
-          // AssetVersion
           id: createdAssetVersion.id,
           baseline: createdAssetVersion.baseline,
           version: createdAssetVersion.version,
@@ -357,25 +343,29 @@ export class AssetRepository extends AbstractRepository<Asset> {
           editorUnitId,
           archived: false,
           updateUserId: user.id,
-
           financialScore: scores.financialScore,
           reputationScore: scores.reputationScore,
           confidentialityScore: scores.confidentialityScore,
           integrityScore: scores.integrityScore,
           availabilityScore: scores.availabilityScore,
           evaluationScore: createdAssetVersion.evaluationScore,
-
-          // Asset
           assetId: createdAsset.id,
           referenceId: refId,
           name,
           externalRefId,
-
           tags,
         },
       });
+
+      await queryRunner.commitTransaction();
     } catch (error) {
-      console.log('Elastic sync failed', createdAssetVersion.id, error);
+      await queryRunner.rollbackTransaction();
+
+      throw new InternalServerErrorException(
+        `Transaction failed: ${error.message}`,
+      );
+    } finally {
+      await queryRunner.release();
     }
 
     return createdAsset;
@@ -502,33 +492,28 @@ export class AssetRepository extends AbstractRepository<Asset> {
         return { asset: null, errors };
       }
 
-      try {
-        await ElasticsearchClient.instance.client.index({
-          index: 'assets',
-          id: createdAssetVersion.id,
-          body: {
-            ...content,
-            referenceId: refId,
-            baseline: '1',
-            locationId: data.locationId,
-            name,
-            assetTypeVersionId: assetTypeVersion.id,
-            tags,
-            externalRefId,
-            accountableUnitId: accountableUnitId,
-            accountableId: accountableId,
-            editorId,
-            editorUnitId,
-            archived: false,
-            content: undefined,
-          },
-        });
-        await ElasticsearchClient.instance.client.indices.refresh({
-          index: 'assets',
-        });
-      } catch (error) {
-        console.log(error);
-      }
+      // Elastic indexing BEFORE commit to ensure consistency
+      await ElasticsearchClient.instance.client.index({
+        index: 'assets',
+        id: createdAssetVersion.id,
+        refresh: true,
+        document: {
+          ...content,
+          referenceId: refId,
+          baseline: '1',
+          locationId: data.locationId,
+          name,
+          assetTypeVersionId: assetTypeVersion.id,
+          tags,
+          externalRefId,
+          accountableUnitId: accountableUnitId,
+          accountableId: accountableId,
+          editorId,
+          editorUnitId,
+          archived: false,
+          content: undefined,
+        },
+      });
 
       const savedRelations = await queryRunner.manager.save(assetRelations);
       if (!savedRelations) {
@@ -913,43 +898,37 @@ export class AssetRepository extends AbstractRepository<Asset> {
           evaluationScore: evaluationScore,
         });
 
-        try {
-          await ElasticsearchClient.instance.client.index({
-            index: 'assets',
-            id: newAssetVersion.id,
-            body: {
-              ...(content ? content : JSON.parse(oldAssetVersion.content)),
-              referenceId: oldAssetVersion.asset.referenceId,
-              baseline: (parseInt(oldAssetVersion.baseline) + 1).toString(),
-              name: name || oldAssetVersion.asset.name,
-              assetTypeVersionId: oldAssetVersion.assetTypeVersionId,
-              tags,
-              locationId: locationId ? locationId : undefined,
-              accountableId: accountableId || oldAssetVersion.accountableId,
-              accountableUnitId:
-                accountableUnitId || oldAssetVersion.accountableUnitId,
-              editorId: editorId || oldAssetVersion.editorId,
-              editorUnitId: editorUnitId || oldAssetVersion.editorUnitId,
-              externalRefId,
-              archived: false,
-              content: undefined,
-            },
-          });
-          await ElasticsearchClient.instance.client.update({
-            index: 'assets',
-            id: oldAssetVersion.id,
-            doc: {
-              archived: true,
-            },
-          });
-          await ElasticsearchClient.instance.client.indices.refresh({
-            index: 'assets',
-          });
-
-          // end relation with other fields changed
-        } catch (error) {
-          console.log(error);
-        }
+        // Elastic indexing BEFORE commit to ensure consistency
+        await ElasticsearchClient.instance.client.index({
+          index: 'assets',
+          id: newAssetVersion.id,
+          document: {
+            ...(content ? content : JSON.parse(oldAssetVersion.content)),
+            referenceId: oldAssetVersion.asset.referenceId,
+            baseline: (parseInt(oldAssetVersion.baseline) + 1).toString(),
+            name: name || oldAssetVersion.asset.name,
+            assetTypeVersionId: oldAssetVersion.assetTypeVersionId,
+            tags,
+            locationId: locationId ? locationId : undefined,
+            accountableId: accountableId || oldAssetVersion.accountableId,
+            accountableUnitId:
+              accountableUnitId || oldAssetVersion.accountableUnitId,
+            editorId: editorId || oldAssetVersion.editorId,
+            editorUnitId: editorUnitId || oldAssetVersion.editorUnitId,
+            externalRefId,
+            archived: false,
+            content: undefined,
+          },
+        });
+        await ElasticsearchClient.instance.client.update({
+          index: 'assets',
+          id: oldAssetVersion.id,
+          refresh: true,
+          doc: {
+            archived: true,
+          },
+        });
+        // end relation with other fields changed
 
         // start relation with other fields changed
         const inheritedRelations = existingRelations
