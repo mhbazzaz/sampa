@@ -1,10 +1,5 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentMember } from 'src/common/decorators/current-member.decorators';
 import { InternalCommunicationGuard } from 'src/common/guards/internal-communication.guard';
 import { UserGuard } from 'src/common/guards/user.guard';
@@ -24,7 +19,6 @@ export class AssetCategoryController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Get('')
   async findAll(@Query() query: PaginationDto) {
@@ -61,7 +55,6 @@ export class AssetCategoryController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Get('my-categories')
   async findAllMyCategories(
@@ -85,7 +78,6 @@ export class AssetCategoryController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Get(':id')
   async findOne(@Param('id') id: string) {
@@ -105,7 +97,6 @@ export class AssetCategoryController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Get(':id/my-asset-types')
   async findOneMyAssetTypes(

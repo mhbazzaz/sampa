@@ -8,7 +8,7 @@ import {
   SetMetadata,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentMember } from 'src/common/decorators/current-member.decorators';
 import { ActionEnum } from 'src/common/enums/action.enum';
 import { AuthorizationMetaDataEnum } from 'src/common/enums/authorization-meta-data.enum';
@@ -32,7 +32,6 @@ export class RequestCommentController {
   @ApiOperation({
     summary: `Create Request Comment, ${ActionEnum.CreateRequestComment} | ${ProcessEnum.AssessmentRequest}`,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(
@@ -60,7 +59,6 @@ export class RequestCommentController {
   @ApiOperation({
     summary: `Create Request Comment, ${ActionEnum.GetRequestComment} | ${ProcessEnum.AssessmentRequest}`,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, ActionEnum.GetRequestComment)

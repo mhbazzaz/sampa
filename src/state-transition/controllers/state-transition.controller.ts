@@ -1,10 +1,5 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { UserGuard } from 'src/common/guards/user.guard';
 import { responseGenerator } from 'src/common/helpers/response-generator';
 import { StateTransition } from '../entities/state-transition.entity';
@@ -22,7 +17,6 @@ export class StateTransitionController {
   @ApiCreatedResponse({
     type: [StateTransition],
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Get('/state-transitions')
   async findAll() {

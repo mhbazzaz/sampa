@@ -88,6 +88,7 @@ export class AssetTypeService {
       content: JSON.stringify(data.content),
       filters: existingFilters,
       hasLocation: data.hasLocation,
+      classification: data.classification,
       version: 1,
       locationTypes: data.locationTypeIds
         ? data.locationTypeIds.map(

@@ -214,17 +214,13 @@ export class AssetRepository extends AbstractRepository<Asset> {
       integrityScore,
       availabilityScore,
     } = data;
-
     const queryRunner = this.dataSource.createQueryRunner();
 
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
-    let createdAsset: Asset;
-    let createdAssetVersion: AssetVersion;
-
     try {
-      createdAsset = await queryRunner.manager.save(
+      const createdAsset = await queryRunner.manager.save(
         Asset,
         new Asset({
           referenceId: refId,
@@ -241,31 +237,32 @@ export class AssetRepository extends AbstractRepository<Asset> {
         });
 
       const scores = {
-        financialScore: financialScore ?? 0,
-        reputationScore: reputationScore ?? 0,
-        confidentialityScore: confidentialityScore ?? 0,
-        integrityScore: integrityScore ?? 0,
-        availabilityScore: availabilityScore ?? 0,
+        financialScore: financialScore ? financialScore : 0,
+        reputationScore: reputationScore ? reputationScore : 0,
+        confidentialityScore: confidentialityScore ? confidentialityScore : 0,
+        integrityScore: integrityScore ? integrityScore : 0,
+        availabilityScore: availabilityScore ? availabilityScore : 0,
       };
 
       const Financial = assetScoringFactories.find(
-        (x) => x.title === 'Financial',
+        (assetScoringFactor) => assetScoringFactor.title === 'Financial',
       );
 
       const Integrity = assetScoringFactories.find(
-        (x) => x.title === 'Integrity',
+        (assetScoringFactor) => assetScoringFactor.title === 'Integrity',
       );
 
       const Confidentiality = assetScoringFactories.find(
-        (x) => x.title === 'Confidentiality',
+        (assetScoringFactor) => assetScoringFactor.title === 'Confidentiality',
       );
 
       const Reputation = assetScoringFactories.find(
-        (x) => x.title === 'Reputation / Regulatory',
+        (assetScoringFactor) =>
+          assetScoringFactor.title === 'Reputation / Regulatory',
       );
 
       const Availability = assetScoringFactories.find(
-        (x) => x.title === 'Availability',
+        (assetScoringFactor) => assetScoringFactor.title === 'Availability',
       );
 
       if (
@@ -275,7 +272,7 @@ export class AssetRepository extends AbstractRepository<Asset> {
         !Reputation ||
         !Availability
       ) {
-        throw new InternalServerErrorException('Asset scoring factors missing');
+        throw new InternalServerErrorException('');
       }
 
       const evaluationScore =
@@ -285,91 +282,88 @@ export class AssetRepository extends AbstractRepository<Asset> {
         scores.integrityScore * Integrity.weight +
         scores.reputationScore * Reputation.weight;
 
-      createdAssetVersion = await queryRunner.manager.save(
+      const createdAssetVersion = await queryRunner.manager.save(
         AssetVersion,
         new AssetVersion({
           baseline: '1',
           locationId: data.locationId,
           content: JSON.stringify(content),
-          accountableUnitId,
-          accountableId,
+          accountableUnitId: accountableUnitId,
+          accountableId: accountableId,
           editorId,
           editorUnitId,
           assetId: createdAsset.id,
           assetTypeVersionId: assetTypeVersion.id,
           ...scores,
-          evaluationScore,
+          evaluationScore: evaluationScore,
           updateUserId: user.id,
         }),
       );
 
+      if (!createdAsset)
+        throw new InternalServerErrorException('Error during creating asset');
+
       const assetRelations = children.map((child) => {
-        const relation = relatedAssets.find(
-          (x) => x.id === child.assetTypeVersionId,
+        const _child = relatedAssets.find(
+          (item) => item.id === child.assetTypeVersionId,
         );
 
-        if (!relation) {
-          throw new BadRequestException(
-            this.i18nService.t('messages.ERROR_NOT_FOUND_RECORD'),
-          );
+        if (!_child) {
+          throw new BadRequestException({
+            message: this.i18nService.t('messages.ERROR_NOT_FOUND_RECORD'),
+          });
         }
 
         return new AssetRelation({
-          assetRelationTypeId: relation.assetRelationType!.id,
+          assetRelationTypeId: _child.assetRelationType!.id,
           parentId: createdAssetVersion.id,
           childId: child.id,
         });
       });
 
-      if (assetRelations.length > 0) {
-        await queryRunner.manager.save(assetRelations);
+      await queryRunner.manager.save(assetRelations);
+      await queryRunner.commitTransaction();
+
+      try {
+        await ElasticsearchClient.instance.client.index({
+          index: 'assets',
+          id: createdAssetVersion.id,
+          refresh: true,
+          body: {
+            ...content,
+            referenceId: refId,
+            baseline: '1',
+            locationId: data.locationId,
+            name,
+            assetTypeVersionId: assetTypeVersion.id,
+            tags,
+            externalRefId,
+            accountableUnitId: accountableUnitId,
+            accountableId: accountableId,
+            editorId,
+            editorUnitId,
+            archived: false,
+            content: undefined,
+          },
+        });
+        // await ElasticsearchClient.instance.client.indices.refresh({
+        //   index: 'assets',
+        // });
+      } catch (error) {
+        console.log(error);
       }
 
-      // Elastic indexing BEFORE commit to ensure consistency
-      await ElasticsearchClient.instance.client.index({
-        index: 'assets',
-        id: createdAssetVersion.id,
-        refresh: true,
-        document: {
-          ...content,
-          id: createdAssetVersion.id,
-          baseline: createdAssetVersion.baseline,
-          version: createdAssetVersion.version,
-          locationId: createdAssetVersion.locationId,
-          assetTypeVersionId: createdAssetVersion.assetTypeVersionId,
-          accountableUnitId,
-          accountableId,
-          editorId,
-          editorUnitId,
-          archived: false,
-          updateUserId: user.id,
-          financialScore: scores.financialScore,
-          reputationScore: scores.reputationScore,
-          confidentialityScore: scores.confidentialityScore,
-          integrityScore: scores.integrityScore,
-          availabilityScore: scores.availabilityScore,
-          evaluationScore: createdAssetVersion.evaluationScore,
-          assetId: createdAsset.id,
-          referenceId: refId,
-          name,
-          externalRefId,
-          tags,
-        },
-      });
-
-      await queryRunner.commitTransaction();
+      return createdAsset;
     } catch (error) {
       await queryRunner.rollbackTransaction();
-
       throw new InternalServerErrorException(
         `Transaction failed: ${error.message}`,
       );
     } finally {
       await queryRunner.release();
     }
-
-    return createdAsset;
   }
+
   //------------------------------
   async currentUserAssets(user: User, assetTypeId: string) {
     return this.assetRepository
@@ -492,28 +486,33 @@ export class AssetRepository extends AbstractRepository<Asset> {
         return { asset: null, errors };
       }
 
-      // Elastic indexing BEFORE commit to ensure consistency
-      await ElasticsearchClient.instance.client.index({
-        index: 'assets',
-        id: createdAssetVersion.id,
-        refresh: true,
-        document: {
-          ...content,
-          referenceId: refId,
-          baseline: '1',
-          locationId: data.locationId,
-          name,
-          assetTypeVersionId: assetTypeVersion.id,
-          tags,
-          externalRefId,
-          accountableUnitId: accountableUnitId,
-          accountableId: accountableId,
-          editorId,
-          editorUnitId,
-          archived: false,
-          content: undefined,
-        },
-      });
+      try {
+        await ElasticsearchClient.instance.client.index({
+          index: 'assets',
+          id: createdAssetVersion.id,
+          body: {
+            ...content,
+            referenceId: refId,
+            baseline: '1',
+            locationId: data.locationId,
+            name,
+            assetTypeVersionId: assetTypeVersion.id,
+            tags,
+            externalRefId,
+            accountableUnitId: accountableUnitId,
+            accountableId: accountableId,
+            editorId,
+            editorUnitId,
+            archived: false,
+            content: undefined,
+          },
+        });
+        await ElasticsearchClient.instance.client.indices.refresh({
+          index: 'assets',
+        });
+      } catch (error) {
+        console.log(error);
+      }
 
       const savedRelations = await queryRunner.manager.save(assetRelations);
       if (!savedRelations) {
@@ -898,37 +897,43 @@ export class AssetRepository extends AbstractRepository<Asset> {
           evaluationScore: evaluationScore,
         });
 
-        // Elastic indexing BEFORE commit to ensure consistency
-        await ElasticsearchClient.instance.client.index({
-          index: 'assets',
-          id: newAssetVersion.id,
-          document: {
-            ...(content ? content : JSON.parse(oldAssetVersion.content)),
-            referenceId: oldAssetVersion.asset.referenceId,
-            baseline: (parseInt(oldAssetVersion.baseline) + 1).toString(),
-            name: name || oldAssetVersion.asset.name,
-            assetTypeVersionId: oldAssetVersion.assetTypeVersionId,
-            tags,
-            locationId: locationId ? locationId : undefined,
-            accountableId: accountableId || oldAssetVersion.accountableId,
-            accountableUnitId:
-              accountableUnitId || oldAssetVersion.accountableUnitId,
-            editorId: editorId || oldAssetVersion.editorId,
-            editorUnitId: editorUnitId || oldAssetVersion.editorUnitId,
-            externalRefId,
-            archived: false,
-            content: undefined,
-          },
-        });
-        await ElasticsearchClient.instance.client.update({
-          index: 'assets',
-          id: oldAssetVersion.id,
-          refresh: true,
-          doc: {
-            archived: true,
-          },
-        });
-        // end relation with other fields changed
+        try {
+          await ElasticsearchClient.instance.client.index({
+            index: 'assets',
+            id: newAssetVersion.id,
+            body: {
+              ...(content ? content : JSON.parse(oldAssetVersion.content)),
+              referenceId: oldAssetVersion.asset.referenceId,
+              baseline: (parseInt(oldAssetVersion.baseline) + 1).toString(),
+              name: name || oldAssetVersion.asset.name,
+              assetTypeVersionId: oldAssetVersion.assetTypeVersionId,
+              tags,
+              locationId: locationId ? locationId : undefined,
+              accountableId: accountableId || oldAssetVersion.accountableId,
+              accountableUnitId:
+                accountableUnitId || oldAssetVersion.accountableUnitId,
+              editorId: editorId || oldAssetVersion.editorId,
+              editorUnitId: editorUnitId || oldAssetVersion.editorUnitId,
+              externalRefId,
+              archived: false,
+              content: undefined,
+            },
+          });
+          await ElasticsearchClient.instance.client.update({
+            index: 'assets',
+            id: oldAssetVersion.id,
+            doc: {
+              archived: true,
+            },
+          });
+          await ElasticsearchClient.instance.client.indices.refresh({
+            index: 'assets',
+          });
+
+          // end relation with other fields changed
+        } catch (error) {
+          console.log(error);
+        }
 
         // start relation with other fields changed
         const inheritedRelations = existingRelations

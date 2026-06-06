@@ -1,4 +1,5 @@
 import { AssetVersion } from 'src/asset/entities/asset-version.entity';
+import { AssetTypeClassificationEnum } from 'src/common/enums/asset-type-classification.enum';
 import { AbstractEntity } from 'src/database/abstract.entity';
 import { Filter } from 'src/filter/entities/filter.entity';
 import { LocationType } from 'src/location-type/entities/location-type.entity';
@@ -31,6 +32,14 @@ export class AssetTypeVersion extends AbstractEntity<AssetTypeVersion> {
 
   @ManyToOne(() => AssetType)
   assetType?: AssetType;
+
+  @Column({
+    type: 'enum',
+    enum: AssetTypeClassificationEnum,
+    default: null,
+    nullable: true,
+  })
+  classification: AssetTypeClassificationEnum;
 
   @OneToMany(
     () => AssetVersion,

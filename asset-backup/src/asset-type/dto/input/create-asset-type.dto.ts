@@ -3,6 +3,7 @@ import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
+  IsEnum,
   IsNotEmpty,
   IsObject,
   IsOptional,
@@ -12,6 +13,7 @@ import {
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 import { Asset } from 'src/asset/entities/asset.entity';
+import { AssetTypeClassificationEnum } from 'src/common/enums/asset-type-classification.enum';
 import { CheckAssetTypeCodeExist } from 'src/common/validations/check-asset-type-code-exists.validator';
 import { CheckAssetTypeNameExist } from 'src/common/validations/check-asset-type-name-exists.validator';
 
@@ -72,6 +74,11 @@ export class CreateAssetTypeDto {
   @Type(() => AssetRelationIdsDto)
   @IsOptional()
   assetRelationIds?: AssetRelationIdsDto[];
+
+  @ApiProperty()
+  @IsEnum(AssetTypeClassificationEnum)
+  @IsOptional()
+  classification?: AssetTypeClassificationEnum;
 
   @ApiProperty({ type: () => [Asset] })
   @IsOptional()

@@ -7,12 +7,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { ContextRequest } from 'src/common/decorators/context-request.decorator';
 import { CurrentMember } from 'src/common/decorators/current-member.decorators';
@@ -39,7 +34,6 @@ export class AssetController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Get('asset')
   async findAllUserScope(@Query() query: FindAllAssetQueryDto) {
@@ -57,7 +51,6 @@ export class AssetController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Get('asset/get-asset-info/:name')
   async getAssetInfo(@Param('name') name: string): Promise<GetAssetDto> {
@@ -75,7 +68,6 @@ export class AssetController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Get('asset/grouped')
   async getAssetsGrouped(
@@ -96,7 +88,6 @@ export class AssetController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Get('asset/grouped/versions')
   async getAssetsGroupedVersions(
@@ -122,7 +113,6 @@ export class AssetController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Post('admin/asset/retrieval')
   async assetRetrieval(

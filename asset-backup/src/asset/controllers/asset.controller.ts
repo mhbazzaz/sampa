@@ -14,7 +14,6 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import {
-  ApiBearerAuth,
   ApiCreatedResponse,
   ApiHeader,
   ApiOperation,
@@ -45,6 +44,8 @@ import { CreateAssetDto } from '../dto/input/create-asset.dto';
 import { FindAllAssetQueryDto } from '../dto/input/find-all-asset-query.dto';
 import { findAllAssetReportQueryDto } from '../dto/input/find-all-asset-report.query.dto';
 import { FindAllAssetQueryWithOutPaginateDto } from '../dto/input/find-all-asset-without-paginate.dto';
+import { GetLogSourceGroupsDTO } from '../dto/input/get-log-source-groups.dto';
+import { GetLogSourceTypeDTO } from '../dto/input/get-log-source-type.dto';
 import { UpdateAssetDto } from '../dto/input/update-asset.dto';
 import { GetAssetDto } from '../dto/response/get-asset.dto';
 import { AssetScoreService } from '../services/asset-score.service';
@@ -60,7 +61,6 @@ export class AssetController {
   //------------------------------
   @ApiTags('Asset')
   @ApiOperation({ summary: 'Create Asset' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(UserGuard, AuthorizationGuard)
   @Action(ActionEnum.Save)
   @Process(ProcessEnum.AssetManagement)
@@ -84,7 +84,6 @@ export class AssetController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiTags('Admin / Asset')
   @Get('admin/asset')
@@ -102,7 +101,6 @@ export class AssetController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiTags('Admin / Asset')
   @Post('admin/asset/index-for-elasticsearch')
@@ -119,7 +117,6 @@ export class AssetController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiTags('Admin / Asset')
   @Get('admin/asset/filtered')
@@ -137,7 +134,6 @@ export class AssetController {
   //------------------------------
   @ApiTags('Asset')
   @ApiOperation({ summary: 'Get All Asset With Filter' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Read)
@@ -157,8 +153,72 @@ export class AssetController {
 
   //------------------------------
   @ApiTags('Asset')
+  @ApiOperation({ summary: 'Get Asset Info By Asset Name' })
+  @ApiCreatedResponse({
+    type: GetAssetDto,
+  })
+  @UseGuards(UserGuard)
+  @Get('asset/log-source-groups')
+  async getLogSourceGroups(
+    @Query() query: GetLogSourceGroupsDTO,
+    @CurrentUser() user: User,
+  ): Promise<GetAssetDto> {
+    const result = await this.assetService.getLogSourceGroups(query, user);
+    return responseGenerator({
+      statusCode: 200,
+      message: 'successful',
+      data: { data: result[0], count: result[1] },
+    });
+  }
+
+  //------------------------------
+  @ApiTags('Asset')
+  @ApiOperation({ summary: 'Get Asset Info By Asset Name' })
+  @ApiCreatedResponse({
+    type: GetAssetDto,
+  })
+  @UseGuards(UserGuard)
+  @Get('asset/log-source/types')
+  async getLogSourceTypes(
+    @Query() query: GetLogSourceTypeDTO,
+    @CurrentUser() user: User,
+  ): Promise<GetAssetDto> {
+    const result = await this.assetService.getLogSourceTypes(query, user);
+    return responseGenerator({
+      statusCode: 200,
+      message: 'successful',
+      data: { data: result[0], count: result[1] },
+    });
+  }
+
+  //------------------------------
+  @ApiTags('Asset')
+  @ApiOperation({ summary: 'Get Asset Info By Asset Name' })
+  @ApiCreatedResponse({
+    type: GetAssetDto,
+  })
+  @UseGuards(UserGuard)
+  @Get('asset/log-source/:typeId/protocol')
+  async getLogSourceProtocols(
+    @Query() query: GetLogSourceTypeDTO,
+    @Param('typeId') typeId: string,
+    @CurrentUser() user: User,
+  ): Promise<GetAssetDto> {
+    const result = await this.assetService.getLogSourceProtocols(
+      query,
+      typeId,
+      user,
+    );
+    return responseGenerator({
+      statusCode: 200,
+      message: 'successful',
+      data: { data: result[0], count: result[1] },
+    });
+  }
+
+  //------------------------------
+  @ApiTags('Asset')
   @ApiOperation({ summary: 'Get All Asset With Filter' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Read)
@@ -192,7 +252,6 @@ export class AssetController {
   //------------------------------
   @ApiTags('Asset')
   @ApiOperation({ summary: 'Get All Asset With Filter for report' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.GetReport)
@@ -226,7 +285,6 @@ export class AssetController {
   //------------------------------
   @ApiTags('Asset')
   @ApiOperation({ summary: 'Get All Asset With Filter' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.GetReport)
@@ -256,7 +314,6 @@ export class AssetController {
   //------------------------------
   @ApiTags('Asset')
   @ApiOperation({ summary: 'Get All Asset With Filter' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.GetReport)
@@ -302,7 +359,6 @@ export class AssetController {
   //------------------------------
   @ApiTags('Asset')
   @ApiOperation({ summary: 'Asset fields auto complete' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Read)
@@ -325,7 +381,6 @@ export class AssetController {
   //------------------------------
   @ApiTags('Asset')
   @ApiOperation({ summary: 'Get All Asset With Filter' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(UserGuard, AuthorizationGuard)
   @Action(ActionEnum.Read)
   @Process(ProcessEnum.AssetManagement)
@@ -372,7 +427,6 @@ export class AssetController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('accessToken')
   @UseGuards(UserGuard, AuthorizationGuard)
   @Action(ActionEnum.Read)
   @Process(ProcessEnum.AssetManagement)
@@ -392,7 +446,6 @@ export class AssetController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Get('assets/current-user-assets')
   async currentUserAssets(
@@ -413,7 +466,6 @@ export class AssetController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('accessToken')
   @UseGuards(UserGuard, AuthorizationGuard)
   @Action(ActionEnum.Read)
   @Process(ProcessEnum.AssetManagement)
@@ -435,7 +487,6 @@ export class AssetController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('accessToken')
   @UseGuards(UserGuard, AuthorizationGuard)
   @Action(ActionEnum.Read)
   @Process(ProcessEnum.AssetManagement)
@@ -455,7 +506,6 @@ export class AssetController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Read)
@@ -482,7 +532,6 @@ export class AssetController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('accessToken')
   @UseGuards(UserGuard, AuthorizationGuard, AssetModificationAccessGuard)
   @Action(ActionEnum.Save)
   @Process(ProcessEnum.AssetManagement)
@@ -504,7 +553,6 @@ export class AssetController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Delete)
@@ -522,7 +570,6 @@ export class AssetController {
   //----------------------------------
   @ApiTags('Asset')
   @ApiOperation({ summary: 'Get Asset Scores' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Read)
@@ -541,7 +588,6 @@ export class AssetController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Read)
@@ -570,7 +616,6 @@ export class AssetController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Read)
@@ -593,7 +638,6 @@ export class AssetController {
   @ApiOperation({
     summary: 'Get accessible assets filtered by asset types',
   })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Read)
@@ -620,7 +664,6 @@ export class AssetController {
   @ApiOperation({
     summary: 'Get count of accessible asset versions grouped by responsibility',
   })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Read)

@@ -63,7 +63,6 @@ export class GroupMembershipService {
 
         element.userId = response.data.data.id;
       } catch (error) {
-        console.log(error.response.data);
         if (axios.isAxiosError(error)) {
           if (error.response) {
             throw new BadRequestException(error.response.data.message);
@@ -193,7 +192,6 @@ export class GroupMembershipService {
 
         element.userId = response.data.data.id;
       } catch (error) {
-        console.log(error.response.data);
         if (axios.isAxiosError(error)) {
           if (error.response) {
             throw new BadRequestException(error.response.data.message);

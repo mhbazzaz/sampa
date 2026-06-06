@@ -10,12 +10,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AdminGuard } from 'src/common/guards/admin.guard';
 import { AuthorizationGuard } from 'src/common/guards/authorization.guard';
 import { UserGuard } from 'src/common/guards/user.guard';
@@ -34,7 +29,6 @@ export class TestcaseGroupController {
   //------------------------------
   @ApiOperation({ summary: 'Create Test-Case Group' })
   @ApiTags('Admin / Test-Case-Group')
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiCreatedResponse({
     type: GetTestcaseDto,
@@ -52,7 +46,6 @@ export class TestcaseGroupController {
   //------------------------------
   @ApiOperation({ summary: 'Get All Test-Case Groups' })
   @ApiTags('Admin / Test-Case-Group')
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiCreatedResponse({
     type: [GetTestcaseDto],
@@ -70,7 +63,6 @@ export class TestcaseGroupController {
   //------------------------------
   @ApiOperation({ summary: 'Get One Test-Case Group By ID' })
   @ApiTags('Admin / Test-Case-Group')
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiCreatedResponse({
     type: GetTestcaseDto,
@@ -91,7 +83,6 @@ export class TestcaseGroupController {
   //------------------------------
   @ApiOperation({ summary: 'Get All Test-Case Groups For User Scope' })
   @ApiTags('Test-Case-Group')
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @ApiCreatedResponse({
@@ -110,7 +101,6 @@ export class TestcaseGroupController {
   //------------------------------
   @ApiOperation({ summary: 'Get One Test-Case Group By ID For User Scope' })
   @ApiTags('Test-Case-Group')
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @ApiCreatedResponse({
@@ -132,7 +122,6 @@ export class TestcaseGroupController {
   //------------------------------
   @ApiOperation({ summary: 'Update Test-Case Group By Id' })
   @ApiTags('Admin / Test-Case-Group')
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiCreatedResponse({
     type: GetTestcaseDto,
@@ -151,7 +140,6 @@ export class TestcaseGroupController {
   //----------------------------------
   @ApiOperation({ summary: 'Remove Test-Case Group By Id' })
   @ApiTags('Admin / Test-Case-Group')
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiCreatedResponse({
     type: GetTestcaseDto,

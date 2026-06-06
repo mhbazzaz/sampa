@@ -9,6 +9,7 @@ import { ProcessEnum } from 'src/common/enums/process.enum';
 import { AbstractRepository } from 'src/database/abstract.repository';
 import { GroupMembershipRepository } from 'src/group-membership/repositories/group-membership.repository';
 import { Member } from 'src/member/entities/member.entity';
+import { Role } from 'src/role/entities/role.entity';
 import { StateTransitionRepository } from 'src/state-transition/repositories/state-transition.repository';
 import {
   DataSource,
@@ -18,8 +19,10 @@ import {
   QueryRunner,
   Repository,
 } from 'typeorm';
+import { FindAllAssessmentQueryDto } from '../dto/input/find-all-assessment-request-query.dto';
 import { AssessmentLayer } from '../entities/assessment-layer.entity';
 import { AssessmentRequest } from '../entities/assessment-request.entity';
+import { AssessmentReportFilterDto } from '../dto/input/assessment-report-filter.dto';
 
 @Injectable()
 export class AssessmentRequestRepository extends AbstractRepository<AssessmentRequest> {
@@ -101,7 +104,6 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
       await queryRunner.commitTransaction();
       return savedAssessmentRequest;
     } catch (err) {
-      console.log(err.message);
       await queryRunner.rollbackTransaction();
       throw err;
     } finally {
@@ -134,7 +136,6 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
       await queryRunner.commitTransaction();
       return savedLayer;
     } catch (err) {
-      console.log(err.message);
       await queryRunner.rollbackTransaction();
       throw err;
     } finally {
@@ -148,8 +149,8 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
       where: { id },
       relations: [
         'environment',
-        'assesmentLayers',
-        'assesmentLayers.assessmentType',
+        'assessmentLayers',
+        'assessmentLayers.assessmentType',
         'asset',
       ],
     });
@@ -180,6 +181,7 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
   async getRequestCartable(
     actions: Action[],
     member: Member,
+    memberRoles: Role[],
     requestLastUpdatedAt?: Date,
     lastId?: string,
   ): Promise<[AssessmentRequest[], number]> {
@@ -220,16 +222,32 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
     );
 
     if (!hasReadAccess) {
-      const teamMemberIds =
-        await this.groupMembershipRepository.getUserTeamMembers(member.id);
-      if (teamMemberIds.length === 0) {
-        return [[], 0];
-      }
+      const teams = await this.groupMembershipRepository.getUserTeamMembers(
+        member.id,
+      );
 
-      qb.andWhere('request.applicantId IN (:...teamMemberIds)', {
-        teamMemberIds,
-      });
-      where.applicantId = In(teamMemberIds);
+      const isApplicantManager = memberRoles.some(
+        (role) => role.name === 'applicant manager',
+      );
+
+      if (isApplicantManager) {
+        if (teams.length > 0) {
+          qb.andWhere(
+            '(request.applicantManagerId = :memberId OR request.applicantId IN (:...teams))',
+            { memberId: member.id, teams },
+          );
+        } else {
+          qb.andWhere('request.applicantManagerId = :memberId', {
+            memberId: member.id,
+          });
+        }
+      } else {
+        if (teams.length > 0) {
+          qb.andWhere('request.applicantId IN (:...teams)', { teams });
+        } else {
+          return [[], 0];
+        }
+      }
     }
 
     // Cursor pagination: updatedAt + tie-breaker id
@@ -258,5 +276,364 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
     });
 
     return [requests, totalRequests];
+  }
+
+  //------------------------------
+  async getRequestIfUserHasAccessToChangeIt(
+    requestId: string,
+    member: Member,
+    memberRoles: Role[],
+    relations: string[] = [],
+  ) {
+    const query = this.assessmentRequestRepository
+      .createQueryBuilder('request')
+      .where('request.id = :requestId', { requestId });
+
+    const joined = new Set<string>();
+
+    for (const relation of relations) {
+      const parts = relation.split('.');
+      let parentAlias = 'request';
+      let currentPath = '';
+
+      for (const part of parts) {
+        currentPath = currentPath ? `${currentPath}.${part}` : part;
+
+        if (!joined.has(currentPath)) {
+          const alias = currentPath.replace(/\./g, '_');
+          query.leftJoinAndSelect(`${parentAlias}.${part}`, alias);
+          joined.add(currentPath);
+        }
+
+        parentAlias = currentPath.replace(/\./g, '_');
+      }
+    }
+
+    const teams = await this.groupMembershipRepository.getUserTeamMembers(
+      member.id,
+    );
+
+    const isApplicantManager = memberRoles.some(
+      (role) => role.name === 'applicant manager',
+    );
+
+    if (isApplicantManager) {
+      if (teams.length > 0) {
+        query.andWhere(
+          '(request.applicantManagerId = :memberId OR request.applicantId IN (:...teams))',
+          { memberId: member.id, teams },
+        );
+      } else {
+        query.andWhere('request.applicantManagerId = :memberId', {
+          memberId: member.id,
+        });
+      }
+    } else {
+      if (teams.length > 0) {
+        query.andWhere('request.applicantId IN (:...teams)', { teams });
+      } else {
+        return null;
+      }
+    }
+
+    return query.getOne();
+  }
+
+  //------------------------------
+  async getRequestWhetherUserCanReadItOrItIsUsers(
+    requestId: string,
+    member: Member,
+    memberRoles: Role[],
+    actions: Action[],
+    relations: string[] = [],
+  ) {
+    const query = this.assessmentRequestRepository
+      .createQueryBuilder('request')
+      .where('request.id = :requestId', { requestId });
+
+    const joined = new Set<string>();
+
+    for (const relation of relations) {
+      const parts = relation.split('.');
+      let parentAlias = 'request';
+      let currentPath = '';
+
+      for (const part of parts) {
+        currentPath = currentPath ? `${currentPath}.${part}` : part;
+
+        if (!joined.has(currentPath)) {
+          const alias = currentPath.replace(/\./g, '_');
+          query.leftJoinAndSelect(`${parentAlias}.${part}`, alias);
+          joined.add(currentPath);
+        }
+
+        parentAlias = currentPath.replace(/\./g, '_');
+      }
+    }
+
+    const hasReadAccess =
+      actions.findIndex((action) => {
+        return (
+          action.name === ActionEnum.Read &&
+          action.process?.name === ProcessEnum.AssessmentRequest
+        );
+      }) === -1;
+
+    if (!hasReadAccess) {
+      const teams = await this.groupMembershipRepository.getUserTeamMembers(
+        member.id,
+      );
+
+      const isApplicantManager = memberRoles.some(
+        (role) => role.name === 'applicant manager',
+      );
+
+      if (isApplicantManager) {
+        if (teams.length > 0) {
+          query.andWhere(
+            '(request.applicantManagerId = :memberId OR request.applicantId IN (:...teams))',
+            { memberId: member.id, teams },
+          );
+        } else {
+          query.andWhere('request.applicantManagerId = :memberId', {
+            memberId: member.id,
+          });
+        }
+      } else {
+        if (teams.length > 0) {
+          query.andWhere('request.applicantId IN (:...teams)', { teams });
+        } else {
+          return null;
+        }
+      }
+    }
+
+    return query.getOne();
+  }
+
+  //------------------------------
+  async getAssessmentReports(filters: AssessmentReportFilterDto) {
+    const query = this.assessmentRequestRepository
+      .createQueryBuilder('request')
+      .leftJoinAndSelect('request.asset', 'asset')
+      .leftJoinAndSelect('request.state', 'state')
+      .leftJoinAndSelect('request.assessmentLayers', 'layer');
+
+    if (filters.startTimeFrom || filters.startTimeTo) {
+      const from = filters.startTimeFrom
+        ? new Date(filters.startTimeFrom)
+        : null;
+      const to = filters.startTimeTo ? new Date(filters.startTimeTo) : null;
+      query.andWhere('request.createdAt BETWEEN :from AND :to', { from, to });
+    }
+
+    if (filters.lastActTimeFrom || filters.lastActTimeTo) {
+      const from = filters.lastActTimeFrom
+        ? new Date(filters.lastActTimeFrom)
+        : null;
+      const to = filters.lastActTimeTo ? new Date(filters.lastActTimeTo) : null;
+      query.andWhere('request.updatedAt BETWEEN :from AND :to', { from, to });
+    }
+
+    if (filters.layerStatuses && filters.layerStatuses.length > 0) {
+      query.andWhere('layer.stateId IN (:...layerStatuses)', {
+        layerStatuses: filters.layerStatuses,
+      });
+      query.groupBy('request.id');
+    } else {
+      query.groupBy('request.id');
+    }
+
+    if (filters.assetReferenceId) {
+      query.andWhere('asset.referenceId = :assetReferenceId', {
+        assetReferenceId: filters.assetReferenceId,
+      });
+    }
+
+    if (filters.assetTitle) {
+      query.andWhere('LOWER(asset.title) LIKE LOWER(:assetTitle)', {
+        assetTitle: `%${filters.assetTitle}%`,
+      });
+    }
+
+    if (filters.assetTypeId) {
+      query.andWhere('asset.assetTypeId = :assetTypeId', {
+        assetTypeId: filters.assetTypeId,
+      });
+    }
+
+    const page = filters.page || 1;
+    const limit = filters.limit || 50;
+    const skip = (page - 1) * limit;
+
+    query.orderBy('request.createdAt', 'DESC').skip(skip).take(limit);
+    const [data, total] = await query.getManyAndCount();
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  //------------------------------
+  async getUsersRequests(
+    query: FindAllAssessmentQueryDto,
+    member: Member,
+    memberRoles: Role[],
+    actions: Action[],
+  ) {
+    const hasReadAccess = actions.some(
+      (action) =>
+        action.name === ActionEnum.Read &&
+        action.process?.name === ProcessEnum.AssessmentRequest,
+    );
+
+    let queryBuilder = this.assessmentRequestRepository
+      .createQueryBuilder('assessmentRequest')
+      .leftJoinAndSelect('assessmentRequest.state', 'state')
+      .leftJoinAndSelect('assessmentRequest.environment', 'environment')
+      .leftJoinAndSelect('assessmentRequest.asset', 'asset');
+
+    if (!hasReadAccess) {
+      const teams = await this.groupMembershipRepository.getUserTeamMembers(
+        member.id,
+      );
+
+      const isApplicantManager = memberRoles.some(
+        (role) => role.name === 'applicant manager',
+      );
+
+      if (isApplicantManager) {
+        if (teams.length > 0) {
+          queryBuilder.andWhere(
+            '(assessmentRequest.applicantManagerId = :memberId OR assessmentRequest.applicantId IN (:...teams))',
+            { memberId: member.id, teams },
+          );
+        } else {
+          queryBuilder.andWhere(
+            'assessmentRequest.applicantManagerId = :memberId',
+            {
+              memberId: member.id,
+            },
+          );
+        }
+      } else {
+        if (teams.length > 0) {
+          queryBuilder.andWhere(
+            'assessmentRequest.applicantId IN (:...teams)',
+            {
+              teams,
+            },
+          );
+        } else {
+          return [[], 0];
+        }
+      }
+    }
+
+    if (query.requestNumber) {
+      queryBuilder = queryBuilder.andWhere(
+        'assessmentRequest.requestNumber LIKE :requestNumber',
+        {
+          requestNumber: `%${query.requestNumber}%`,
+        },
+      );
+    }
+
+    if (query.assetName) {
+      queryBuilder = queryBuilder.andWhere('asset.title ILike :assetName', {
+        assetName: `%${query.assetName}%`,
+      });
+    }
+
+    if (query.stateId) {
+      queryBuilder = queryBuilder.andWhere(
+        'assessmentRequest.stateId = :stateId',
+        {
+          stateId: query.stateId,
+        },
+      );
+    }
+
+    if (query.environmentId) {
+      queryBuilder = queryBuilder.andWhere(
+        'assessmentRequest.environmentId = :environmentId',
+        {
+          environmentId: query.environmentId,
+        },
+      );
+    }
+
+    const createdAtStart = query.createdAtStart
+      ? new Date(query.createdAtStart)
+      : null;
+    const createdAtEnd = query.createdAtEnd
+      ? new Date(query.createdAtEnd)
+      : null;
+
+    if (createdAtStart && createdAtEnd) {
+      queryBuilder = queryBuilder.andWhere(
+        'assessmentRequest.createdAt BETWEEN :createdAtStart AND :createdAtEnd',
+        {
+          createdAtStart,
+          createdAtEnd,
+        },
+      );
+    } else if (createdAtStart) {
+      queryBuilder = queryBuilder.andWhere(
+        'assessmentRequest.createdAt >= :createdAtStart',
+        {
+          createdAtStart,
+        },
+      );
+    } else if (createdAtEnd) {
+      queryBuilder = queryBuilder.andWhere(
+        'assessmentRequest.createdAt <= :createdAtEnd',
+        {
+          createdAtEnd,
+        },
+      );
+    }
+
+    const updatedAtStart = query.updatedAtStart
+      ? new Date(query.updatedAtStart)
+      : null;
+    const updatedAtEnd = query.updatedAtEnd
+      ? new Date(query.updatedAtEnd)
+      : null;
+
+    if (updatedAtStart && updatedAtEnd) {
+      queryBuilder = queryBuilder.andWhere(
+        'assessmentRequest.updatedAt BETWEEN :updatedAtStart AND :updatedAtEnd',
+        {
+          updatedAtStart,
+          updatedAtEnd,
+        },
+      );
+    } else if (updatedAtStart) {
+      queryBuilder = queryBuilder.andWhere(
+        'assessmentRequest.updatedAt >= :updatedAtStart',
+        {
+          updatedAtStart,
+        },
+      );
+    } else if (updatedAtEnd) {
+      queryBuilder = queryBuilder.andWhere(
+        'assessmentRequest.updatedAt <= :updatedAtEnd',
+        {
+          updatedAtEnd,
+        },
+      );
+    }
+
+    queryBuilder = queryBuilder.orderBy('assessmentRequest.createdAt', 'DESC');
+    queryBuilder = queryBuilder.skip(query.skip).take(query.take);
+
+    return queryBuilder.getManyAndCount();
   }
 }

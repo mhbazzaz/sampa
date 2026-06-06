@@ -9,12 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { UserGuard } from 'src/common/guards/user.guard';
 import { responseGenerator } from 'src/common/helpers/response-generator';
 import { PaginationDto } from 'src/common/pagination-dto/pagination.dto';
@@ -33,7 +28,6 @@ export class AssessmentTeamController {
   @ApiCreatedResponse({
     type: GetAssessmentDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Post('')
   async create(
@@ -52,7 +46,6 @@ export class AssessmentTeamController {
   @ApiCreatedResponse({
     type: GetAssessmentDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Get('')
   async findAll(@Query() query: PaginationDto) {
@@ -72,7 +65,6 @@ export class AssessmentTeamController {
   @ApiCreatedResponse({
     type: GetAssessmentDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Get(':id')
   async findOne(@Param('id') id: string): Promise<GetAssessmentDto> {
@@ -89,7 +81,6 @@ export class AssessmentTeamController {
   @ApiCreatedResponse({
     type: GetAssessmentDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Patch(':id')
   async update(@Param('id') id: string, @Body() data: UpdateAssessmentTeamDto) {
@@ -106,7 +97,6 @@ export class AssessmentTeamController {
   @ApiCreatedResponse({
     type: GetAssessmentDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Delete(':id')
   remove(@Param('id') id: string) {

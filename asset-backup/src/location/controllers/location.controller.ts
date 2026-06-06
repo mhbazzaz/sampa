@@ -10,7 +10,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Action } from 'src/common/decorators/action.decorator';
 import { Process } from 'src/common/decorators/process.decorator';
 import { ActionEnum } from 'src/common/enums/action.enum';
@@ -34,7 +34,6 @@ export class LocationController {
   //------------------------------
   @ApiTags('Admin / Location')
   @ApiOperation({ summary: 'Create Location' })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Post('admin/location')
   async create(@Body() data: CreateLocationDto) {
@@ -49,7 +48,6 @@ export class LocationController {
   //------------------------------
   @ApiTags('Admin / Location')
   @ApiOperation({ summary: 'Get All Location With Filter' })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Get('admin/location')
   async findAllAdminScope(@Query() query: FindAllLocationQueryDto) {
@@ -64,7 +62,6 @@ export class LocationController {
   //------------------------------
   @ApiTags('Location')
   @ApiOperation({ summary: 'Get All Related Locations Information' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Read)
@@ -82,7 +79,6 @@ export class LocationController {
   //------------------------------
   @ApiTags('Location')
   @ApiOperation({ summary: 'Get Asset Versions By Location Id' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Read)
@@ -106,7 +102,6 @@ export class LocationController {
   //------------------------------
   @ApiTags('Location')
   @ApiOperation({ summary: 'Get All Base Locations Information' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Read)
@@ -124,7 +119,6 @@ export class LocationController {
   //------------------------------
   @ApiTags('Admin / Location')
   @ApiOperation({ summary: 'Get One Location' })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Get('admin/location/:id')
   async findOneLocation(@Param('id') id: string) {
@@ -139,7 +133,6 @@ export class LocationController {
   //------------------------------
   @ApiTags('Admin / Location')
   @ApiOperation({ summary: 'Update Location' })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @UseInterceptors(ModifyPatchRequestBodyInterceptors)
   @Patch('admin/location/:id')
@@ -150,7 +143,6 @@ export class LocationController {
   //----------------------------------
   @ApiTags('Admin / Location')
   @ApiOperation({ summary: 'Remove Location by ID' })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Delete('admin/location/:id')
   async remove(@Param('id') id: string) {
@@ -160,7 +152,6 @@ export class LocationController {
   //------------------------------
   @ApiTags('Location')
   @ApiOperation({ summary: 'Get All LocationType With Filter' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(UserGuard)
   @Get('location')
   async findAllUserScope(@Query() query: FindAllLocationUserQueryDto) {
@@ -175,7 +166,6 @@ export class LocationController {
   //------------------------------
   @ApiTags('Location')
   @ApiOperation({ summary: 'Get One Location' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(UserGuard)
   @Get('location/:id')
   async findOneLocationUser(@Param('id') id: string) {

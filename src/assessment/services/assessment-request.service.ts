@@ -6,7 +6,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
+import { ActionLogRepository } from 'src/action-log/repositories/action-log.repository';
 import { ActionLogBufferService } from 'src/action-log/services/action-log-buffer.service';
+import { ChangelogConfigFactory } from 'src/action-log/services/change-log-configs';
+import { GenericChangelogService } from 'src/action-log/services/generic-change-log.service';
 import { ActionRepository } from 'src/action/repositories/action.repository';
 import { AssetService } from 'src/asset/services/asset-to-audit.service';
 import { ActionLogStatusEnum } from 'src/common/enums/action-log.enum';
@@ -32,18 +35,14 @@ import { State } from 'src/states/entities/state.entity';
 import { StatesRepository } from 'src/states/repositories/state.repository';
 import { StatesService } from 'src/states/services/states.service';
 import {
-  Between,
   DataSource,
   DeepPartial,
   FindOneOptions,
   FindOptionsWhere,
-  ILike,
   In,
-  LessThanOrEqual,
-  Like,
-  MoreThanOrEqual,
   QueryRunner,
 } from 'typeorm';
+import { AssessmentReportFilterDto } from '../dto/input/assessment-report-filter.dto';
 import { CreateAssessmentRequestDto } from '../dto/input/create-assessment-request.dto';
 import { FindAllAssessmentQueryDto } from '../dto/input/find-all-assessment-request-query.dto';
 import { RequestClosureDto } from '../dto/input/request-closure.dto';
@@ -78,6 +77,9 @@ export class AssessmentRequestService {
     private readonly i18nService: I18nService,
     private readonly dataSource: DataSource,
     private readonly actionLogBufferService: ActionLogBufferService,
+    private readonly configFactory: ChangelogConfigFactory,
+    private readonly changelogService: GenericChangelogService,
+    private readonly actionLogRepository: ActionLogRepository,
   ) {}
 
   //------------------------------
@@ -293,17 +295,12 @@ export class AssessmentRequestService {
     member: Member,
     memberRoles: Role[],
   ) {
-    const where: FindOptionsWhere<AssessmentRequest> = {
-      id: requestId,
-    };
-
-    const teamMemberIds =
-      await this.groupMembershipRepository.getUserTeamMembers(member.id);
-    where.applicantId = In(teamMemberIds);
-
-    const request = await this.assessmentRequestRepository.findOne({
-      where,
-    });
+    const request =
+      await this.assessmentRequestRepository.getRequestIfUserHasAccessToChangeIt(
+        requestId,
+        member,
+        memberRoles,
+      );
 
     if (!request) {
       throw new BadRequestException(
@@ -395,23 +392,19 @@ export class AssessmentRequestService {
 
   //------------------------------
   async provideSpecs(requestId: string, member: Member, memberRoles: Role[]) {
-    const teamMemberIds =
-      await this.groupMembershipRepository.getUserTeamMembers(member.id);
-    const request = await this.assessmentRequestRepository.findOne({
-      where: {
-        id: requestId,
-        applicantId: In(teamMemberIds),
-      },
-      relations: {
-        asset: true,
-        requestSpecContents: true,
-        environment: true,
-        assessmentLayers: {
-          assessmentType: true,
-          state: true,
-        },
-      },
-    });
+    const request =
+      await this.assessmentRequestRepository.getRequestIfUserHasAccessToChangeIt(
+        requestId,
+        member,
+        memberRoles,
+        [
+          'asset',
+          'requestSpecContents',
+          'environment',
+          'assessmentLayers.assessmentType',
+          'assessmentLayers.state',
+        ],
+      );
 
     if (!request) {
       throw new BadRequestException(
@@ -428,7 +421,7 @@ export class AssessmentRequestService {
         assessmentType: request.assessmentLayers?.length
           ? { id: In(request.assessmentLayers.map((l) => l.assessmentTypeId)) }
           : undefined,
-        environmentId: request.environmentId,
+        environments: { id: request.environmentId },
         assetTypeId: request.asset?.assetTypeId,
       },
       relations: { assessmentType: true },
@@ -1275,52 +1268,39 @@ export class AssessmentRequestService {
   }
 
   //------------------------------
-  async getOneInfo(input: {
-    id: string;
-    memberRoles: string[];
-    memberId: string;
-  }) {
-    const { id, memberRoles, memberId } = input;
+  async getAssessmentReports(filters: AssessmentReportFilterDto) {
+    return await this.assessmentRequestRepository.getAssessmentReports(filters);
+  }
+
+  //------------------------------
+  async getOneInfo(input: { id: string; memberRoles: Role[]; member: Member }) {
+    const { id, memberRoles, member } = input;
 
     const actions = await this.actionRepository.findAll({
       select: { id: true, name: true, process: { name: true } },
       relations: ['process'],
-      where: { roles: { id: In(memberRoles) } },
-    });
-
-    const where: FindOptionsWhere<AssessmentRequest> = {
-      id,
-    };
-
-    if (
-      actions.findIndex((action) => {
-        return (
-          action.name === ActionEnum.Read &&
-          action.process?.name === ProcessEnum.AssessmentRequest
-        );
-      }) === -1
-    ) {
-      const teamMemberIds =
-        await this.groupMembershipRepository.getUserTeamMembers(memberId);
-      where.applicantId = In(teamMemberIds);
-    }
-
-    const foundRequest = await this.assessmentRequestRepository.findOne({
-      where,
-      order: { createdAt: 'DESC' },
-      relations: {
-        state: true,
-        environment: true,
-        asset: true,
-        requestSpecContents: true,
-        testcaseContents: true,
-        assessmentLayers: {
-          assessmentTeams: { member: true },
-          assessmentType: true,
-          state: true,
-        },
+      where: {
+        roles: { id: In(memberRoles.map((memberRole) => memberRole.id)) },
       },
     });
+
+    const foundRequest =
+      await this.assessmentRequestRepository.getRequestWhetherUserCanReadItOrItIsUsers(
+        id,
+        member,
+        memberRoles,
+        actions,
+        [
+          'state',
+          'environment',
+          'asset',
+          'requestSpecContents',
+          'testcaseContents.testcaseRemediates',
+          'assessmentLayers.assessmentTeams.member',
+          'assessmentLayers.assessmentType',
+          'assessmentLayers.state',
+        ],
+      );
 
     if (!foundRequest) {
       throw new NotFoundException(
@@ -1354,9 +1334,9 @@ export class AssessmentRequestService {
   async getAssessmentVulnerabilityCount(input: {
     id: string;
     memberRoles: Role[];
-    memberId: string;
+    member: Member;
   }) {
-    const { id, memberRoles, memberId } = input;
+    const { id, memberRoles, member } = input;
 
     const actions = await this.actionRepository.findAll({
       select: { id: true, name: true, process: { name: true } },
@@ -1366,41 +1346,23 @@ export class AssessmentRequestService {
       },
     });
 
-    const where: FindOptionsWhere<AssessmentRequest> = {
-      id,
-    };
-
-    const isApplicantOrApplicantManager = memberRoles.findIndex((memberRole) =>
-      ['applicant', 'applicant manager'].includes(memberRole.name),
-    );
-
-    const hasReadAccess = actions.some(
-      (action) =>
-        action.name === ActionEnum.Read &&
-        action.process?.name === ProcessEnum.AssessmentLayer,
-    );
-
-    if (!hasReadAccess) {
-      if (isApplicantOrApplicantManager !== -1) {
-        const teamMemberIds =
-          await this.groupMembershipRepository.getUserTeamMembers(memberId);
-
-        where.applicantId = In(teamMemberIds);
-      } else {
-        // @TODO must be checked if is this request's auditor
-      }
-    }
-
-    const foundRequest = await this.assessmentRequestRepository.findOne({
-      where,
-      order: { createdAt: 'DESC' },
-      relations: {
-        assessmentLayers: { assessmentType: true },
-        testcaseContents: {
-          testcaseItem: { testcaseGroup: { assessmentType: true } },
-        },
-      },
-    });
+    const foundRequest =
+      await this.assessmentRequestRepository.getRequestWhetherUserCanReadItOrItIsUsers(
+        id,
+        member,
+        memberRoles,
+        actions,
+        [
+          'state',
+          'environment',
+          'asset',
+          'requestSpecContents',
+          'testcaseContents.testcaseRemediates',
+          'assessmentLayers.assessmentTeams.member',
+          'assessmentLayers.assessmentType',
+          'assessmentLayers.state',
+        ],
+      );
 
     if (!foundRequest) {
       throw new NotFoundException(
@@ -1440,9 +1402,11 @@ export class AssessmentRequestService {
 
       if (
         !testcaseContent.status ||
-        ![ContentStatus.Failed, ContentStatus.NotPerforming].includes(
-          testcaseContent.status,
-        )
+        ![
+          ContentStatus.Failed,
+          ContentStatus.NotPerforming,
+          ContentStatus.NotApplicable,
+        ].includes(testcaseContent.status)
       ) {
         continue;
       }
@@ -1468,12 +1432,21 @@ export class AssessmentRequestService {
           testcaseContent.testcaseItem.testcaseGroup.assessmentType.name
         ].all || 0) + 1;
 
-      response[testcaseContent.testcaseItem.testcaseGroup.assessmentType.name][
-        testcaseContent.criticality
-      ] =
-        (response[
+      if (testcaseContent.status === ContentStatus.NotApplicable) {
+        response[
           testcaseContent.testcaseItem.testcaseGroup.assessmentType.name
-        ][testcaseContent.criticality] || 0) + 1;
+        ][ContentStatus.NotApplicable] =
+          (response[
+            testcaseContent.testcaseItem.testcaseGroup.assessmentType.name
+          ][ContentStatus.NotApplicable] || 0) + 1;
+      } else {
+        response[
+          testcaseContent.testcaseItem.testcaseGroup.assessmentType.name
+        ][testcaseContent.criticality] =
+          (response[
+            testcaseContent.testcaseItem.testcaseGroup.assessmentType.name
+          ][testcaseContent.criticality] || 0) + 1;
+      }
     }
 
     // if (!foundRequest.assessmentLayers) {
@@ -1516,17 +1489,20 @@ export class AssessmentRequestService {
   }
 
   //------------------------------
-  async cartable(query: GetCartableDto, memberRoles: string[], member: Member) {
+  async cartable(query: GetCartableDto, memberRoles: Role[], member: Member) {
     const actions = await this.actionRepository.findAll({
       select: { id: true, name: true, process: { name: true } },
       relations: { process: true },
-      where: { roles: { id: In(memberRoles) } },
+      where: {
+        roles: { id: In(memberRoles.map((memberRole) => memberRole.id)) },
+      },
     });
 
     const [fetchedRequests, totalRequests] =
       await this.assessmentRequestRepository.getRequestCartable(
         actions,
         member,
+        memberRoles,
         query.requestLastUpdatedAt,
         query.requestLastId,
       );
@@ -1566,86 +1542,31 @@ export class AssessmentRequestService {
   //------------------------------
   async getUsersRequests(
     query: FindAllAssessmentQueryDto,
-    memberId: string,
-    memberRoles: string[],
+    member: Member,
+    memberRoles: Role[],
   ) {
-    try {
-      const actions = await this.actionRepository.findAll({
-        select: { id: true, name: true, process: { name: true } },
-        relations: ['process'],
-        where: { roles: { id: In(memberRoles) } },
-      });
-
-      const where: FindOptionsWhere<AssessmentRequest> = {};
-
-      if (
-        actions.findIndex((action) => {
-          return (
-            action.name === ActionEnum.Read &&
-            action.process?.name === ProcessEnum.AssessmentRequest
-          );
-        }) === -1
-      ) {
-        const teamMemberIds =
-          await this.groupMembershipRepository.getUserTeamMembers(memberId);
-        where.applicantId = In(teamMemberIds);
-      }
-
-      if (query.requestNumber) {
-        where.requestNumber = Like(`%${query.requestNumber}%`);
-      }
-
-      if (query.assetName) {
-        where.asset = { title: ILike(`%${query.assetName}%`) };
-      }
-
-      if (query.stateId) {
-        where.stateId = query.stateId;
-      }
-
-      if (query.environmentId) {
-        where.environmentId = query.environmentId;
-      }
-
-      if (query.createdAtStart && query.createdAtEnd) {
-        where.createdAt = Between(
-          new Date(query.createdAtStart),
-          new Date(query.createdAtEnd),
-        );
-      } else if (query.createdAtStart) {
-        where.createdAt = MoreThanOrEqual(new Date(query.createdAtStart));
-      } else if (query.createdAtEnd) {
-        where.createdAt = LessThanOrEqual(new Date(query.createdAtEnd));
-      }
-
-      if (query.updatedAtStart && query.updatedAtEnd) {
-        where.updatedAt = Between(
-          new Date(query.updatedAtStart),
-          new Date(query.updatedAtEnd),
-        );
-      } else if (query.updatedAtStart) {
-        where.updatedAt = MoreThanOrEqual(new Date(query.updatedAtStart));
-      } else if (query.updatedAtEnd) {
-        where.updatedAt = LessThanOrEqual(new Date(query.updatedAtEnd));
-      }
-
-      return this.assessmentRequestRepository.findAllPagination(
-        query.skip,
-        query.take,
-        {
-          where,
-          order: { createdAt: 'DESC' },
-          relations: { state: true, environment: true, asset: true },
-        },
-      );
-    } catch (error) {
-      console.log(error);
-      return [];
-    }
+    const actions = await this.actionRepository.findAll({
+      select: { id: true, name: true, process: { name: true } },
+      relations: ['process'],
+      where: {
+        roles: { id: In(memberRoles.map((memberRole) => memberRole.id)) },
+      },
+    });
+    return this.assessmentRequestRepository.getUsersRequests(
+      query,
+      member,
+      memberRoles,
+      actions,
+    );
   }
 
   //------------------------------
-  async updateAssessmentRequest(requestId: string, data: UpdateRequestDto) {
+  async updateAssessmentRequest(
+    requestId: string,
+    data: UpdateRequestDto,
+    currentMember: Member,
+    memberRoles: Role[],
+  ) {
     const request = await this.assessmentRequestRepository.findOne({
       where: { id: requestId },
       relations: { assessmentLayers: true },
@@ -1725,10 +1646,31 @@ export class AssessmentRequestService {
         },
       );
       if (foundIndex === -1 && request.assessmentLayers?.[0].stateId) {
-        await this.assessmentRequestRepository.createAssessmentLayer({
-          stateId: request.assessmentLayers?.[0].stateId,
-          assessmentRequest: request,
-          assessmentTypeId: assessmentType.id,
+        const layer =
+          await this.assessmentRequestRepository.createAssessmentLayer({
+            stateId: request.assessmentLayers?.[0].stateId,
+            assessmentRequest: request,
+            assessmentTypeId: assessmentType.id,
+          });
+
+        const layerConfig = this.configFactory.getAssessmentLayerConfig();
+        const layerChangeLog =
+          await this.changelogService.buildAndEnrichChangeLog(
+            {},
+            layer,
+            layerConfig,
+          );
+
+        await this.actionLogRepository.save({
+          action: ActionEnum.InitiatedRegister,
+          userId: currentMember.id,
+          roleIds: memberRoles.map((r) => r.id),
+          status: ActionLogStatusEnum.SUCCESS,
+          assessmentRequestId: request.id,
+          assessmentLayerId: layer.id,
+          assessmentLayerCurrentStateId: null,
+          assessmentLayerNextStateId: layer.stateId,
+          changes: layerChangeLog,
         });
       }
     }

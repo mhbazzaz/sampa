@@ -38,6 +38,17 @@ export class FindFilteredTestcaseItemQueryDto extends PaginationDto {
   @IsOptional()
   assetTypeId?: string;
 
+  @ApiPropertyOptional()
+  @IsString({
+    message: i18nValidationMessage('validation.IsString'),
+  })
+  @IsUUID('all', {
+    message: i18nValidationMessage('validation.IsUUID'),
+  })
+  @Transform(({ value }) => value || undefined)
+  @IsOptional()
+  requestId?: string;
+
   @ApiPropertyOptional({ type: () => [String] })
   @IsArray({ message: i18nValidationMessage('validation.IsArray') })
   @IsString({

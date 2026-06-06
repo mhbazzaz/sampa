@@ -36,8 +36,7 @@ export class AuthorizationGuard implements CanActivate {
       context.getHandler(),
     );
 
-    const authorization = request.headers.authorization;
-    if (!authorization) {
+    if (!request.member?.id) {
       throw new UnauthorizedException();
     }
 

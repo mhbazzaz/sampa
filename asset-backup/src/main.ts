@@ -68,28 +68,6 @@ async function bootstrap() {
     .setTitle('Asset Management App')
     .setDescription('API description for Asset Management application')
     .setVersion('1.0')
-    .addBearerAuth(
-      {
-        description: `admin access token`,
-        name: 'Authorization',
-        bearerFormat: 'Bearer',
-        scheme: 'Bearer',
-        type: 'http',
-        in: 'header',
-      },
-      'adminAccessToken',
-    )
-    .addBearerAuth(
-      {
-        description: `access token`,
-        name: 'Authorization',
-        bearerFormat: 'Bearer',
-        scheme: 'Bearer',
-        type: 'http',
-        in: 'header',
-      },
-      'accessToken',
-    )
     .build();
 
   const document = SwaggerModule.createDocument(app as any, config, {

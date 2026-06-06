@@ -9,12 +9,7 @@ import {
   SetMetadata,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentMemberRoles } from 'src/common/decorators/current-member-roles.decorators';
 import { CurrentMember } from 'src/common/decorators/current-member.decorators';
 import { ActionEnum } from 'src/common/enums/action.enum';
@@ -49,7 +44,6 @@ export class AssessmentController {
   @ApiCreatedResponse({
     type: GetAssessmentDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, [
@@ -81,7 +75,6 @@ export class AssessmentController {
   @ApiOperation({
     summary: `Create New Assessment Request, ${ActionEnum.DraftModify}, ${ActionEnum.ApprovedModify}, ${ActionEnum.SubmittedModify} | ${ProcessEnum.AssessmentRequest}`,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, [
@@ -94,10 +87,14 @@ export class AssessmentController {
   async update(
     @Param('id') requestId: string,
     @Body() data: UpdateRequestDto,
+    @CurrentMember() currentMember: Member,
+    @CurrentMemberRoles() memberRoles: Role[],
   ): Promise<GetAssessmentDto> {
     const result = await this.assessmentRequestService.updateAssessmentRequest(
       requestId,
       data,
+      currentMember,
+      memberRoles,
     );
     return responseGenerator({
       statusCode: 200,
@@ -108,7 +105,6 @@ export class AssessmentController {
 
   //------------------------------
   @ApiTags('Assessment')
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, [
@@ -139,7 +135,6 @@ export class AssessmentController {
 
   //------------------------------
   @ApiTags('Assessment')
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, [
@@ -174,7 +169,6 @@ export class AssessmentController {
   @ApiOperation({
     summary: `Update One Assessment Request status by action, ${ActionEnum.AwaitingSpecsProvideSpecs} | ${ProcessEnum.AssessmentRequest}`,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, [
@@ -203,7 +197,6 @@ export class AssessmentController {
   @ApiOperation({
     summary: `Get One Assessment Request, ${ActionEnum.ReadForTeam} ${ActionEnum.Read} | ${ProcessEnum.AssessmentRequest}`,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, [
@@ -219,8 +212,8 @@ export class AssessmentController {
   ) {
     const result = await this.assessmentRequestService.getUsersRequests(
       query,
-      member.id,
-      memberRoles ? memberRoles.map((role) => role.id) : [],
+      member,
+      memberRoles,
     );
     return responseGenerator({
       statusCode: 200,
@@ -231,7 +224,6 @@ export class AssessmentController {
 
   //------------------------------
   @ApiTags('Assessment')
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Get('assessment/cartable')
@@ -242,7 +234,7 @@ export class AssessmentController {
   ) {
     const data = await this.assessmentRequestService.cartable(
       query,
-      memberRoles.map((role) => role.id),
+      memberRoles,
       member,
     );
     return responseGenerator({
@@ -258,7 +250,6 @@ export class AssessmentController {
   @ApiCreatedResponse({
     type: GetAssessmentDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, [
@@ -274,8 +265,8 @@ export class AssessmentController {
   ): Promise<GetAssessmentDto> {
     const result = await this.assessmentRequestService.getOneInfo({
       id,
-      memberRoles: memberRoles ? memberRoles.map((role) => role.id) : [],
-      memberId: member.id,
+      memberRoles,
+      member,
     });
     return responseGenerator({
       statusCode: 200,
@@ -290,7 +281,6 @@ export class AssessmentController {
   @ApiCreatedResponse({
     type: GetAssessmentDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, [
@@ -307,7 +297,7 @@ export class AssessmentController {
       await this.assessmentRequestService.getAssessmentVulnerabilityCount({
         id,
         memberRoles: memberRoles,
-        memberId: member.id,
+        member,
       });
     return responseGenerator({
       statusCode: 200,
@@ -321,7 +311,6 @@ export class AssessmentController {
   @ApiCreatedResponse({
     type: GetAssessmentDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, [

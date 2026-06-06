@@ -195,7 +195,8 @@ export class RequestSpecContentService {
           userId: member.id,
           assessmentRequestCurrentStateId:
             layer.assessmentRequest?.stateId ?? null,
-          assessmentRequestNextStateId: layer.assessmentRequest?.stateId ?? null,
+          assessmentRequestNextStateId:
+            layer.assessmentRequest?.stateId ?? null,
           assessmentLayerCurrentStateId: layer.stateId,
           assessmentLayerNextStateId: layer.stateId,
         },
@@ -218,7 +219,8 @@ export class RequestSpecContentService {
           userId: member.id,
           assessmentRequestCurrentStateId:
             layer.assessmentRequest?.stateId ?? null,
-          assessmentRequestNextStateId: layer.assessmentRequest?.stateId ?? null,
+          assessmentRequestNextStateId:
+            layer.assessmentRequest?.stateId ?? null,
           assessmentLayerCurrentStateId: layer.stateId,
           assessmentLayerNextStateId: layer.stateId,
         },

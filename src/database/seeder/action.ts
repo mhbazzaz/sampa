@@ -347,6 +347,16 @@ const actions: {
     processName: ProcessEnum.AssessmentLayer,
   },
   {
+    name: ActionEnum.ReadSpecs,
+    tier: ActionTierEnum.BACKEND,
+    processName: ProcessEnum.AssessmentLayer,
+  },
+  {
+    name: ActionEnum.ReadSpecs,
+    tier: ActionTierEnum.BACKEND,
+    processName: ProcessEnum.AssessmentRequest,
+  },
+  {
     name: ActionEnum.DeleteTestCaseComment,
     tier: ActionTierEnum.BACKEND,
     processName: ProcessEnum.AssessmentLayer,
@@ -360,6 +370,26 @@ const actions: {
     name: ActionEnum.ReadActionLog,
     tier: ActionTierEnum.BACKEND,
     processName: ProcessEnum.AssessmentRequest,
+  },
+  {
+    name: ActionEnum.ReadTestCaseAfterFirstIteration,
+    tier: ActionTierEnum.BACKEND,
+    processName: ProcessEnum.AssessmentRequest,
+  },
+  {
+    name: ActionEnum.ReadWhereIAmManager,
+    tier: ActionTierEnum.BACKEND,
+    processName: ProcessEnum.AssessmentRequest,
+  },
+  {
+    name: ActionEnum.ReadRemediate,
+    tier: ActionTierEnum.BACKEND,
+    processName: ProcessEnum.AssessmentLayer,
+  },
+  {
+    name: ActionEnum.ReadLayersForTeam,
+    tier: ActionTierEnum.BACKEND,
+    processName: ProcessEnum.AssessmentLayer,
   },
 ];
 

@@ -1,5 +1,5 @@
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Action } from 'src/common/decorators/action.decorator';
 import { Process } from 'src/common/decorators/process.decorator';
 import { ActionEnum } from 'src/common/enums/action.enum';
@@ -17,7 +17,6 @@ export class AssetRelationController {
 
   //------------------------------
   @ApiOperation({ summary: 'Create Asset Relation' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Save)

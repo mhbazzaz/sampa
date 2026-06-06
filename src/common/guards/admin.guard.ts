@@ -15,11 +15,6 @@ export class AdminGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
 
-    const authorization = request.headers.authorization;
-    if (!authorization) {
-      throw new UnauthorizedException();
-    }
-
     try {
       const IDP_SERVICE_URL = await Vault.instance.get('IDP_SERVICE_URL');
 
@@ -27,8 +22,11 @@ export class AdminGuard implements CanActivate {
         `${IDP_SERVICE_URL}/idp/api/v1/admins/current-admin`,
         {
           headers: {
-            authorization: authorization,
+            Cookie: request.headers.cookie,
+            'Content-Type':
+              request.headers['content-type'] || 'application/json',
           },
+          withCredentials: true,
         },
       );
 

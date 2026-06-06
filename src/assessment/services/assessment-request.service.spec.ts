@@ -1,7 +1,13 @@
 import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { I18nService } from 'nestjs-i18n';
+import { ActionLogBufferServiceMock } from 'src/action-log/__mock__/action-log-buffer.service';
+import { ChangelogConfigFactoryMock } from 'src/action-log/__mock__/changelog-config-factory';
+import { GenericChangelogServiceMock } from 'src/action-log/__mock__/generic-changelog.service';
 import { ActionLogRepository } from 'src/action-log/repositories/action-log.repository';
+import { ActionLogBufferService } from 'src/action-log/services/action-log-buffer.service';
+import { ChangelogConfigFactory } from 'src/action-log/services/change-log-configs';
+import { GenericChangelogService } from 'src/action-log/services/generic-change-log.service';
 import { Action } from 'src/action/entities/action.entity';
 import { ActionRepository } from 'src/action/repositories/action.repository';
 import { AssetService } from 'src/asset/services/asset-to-audit.service';
@@ -50,6 +56,10 @@ describe('AssessmentRequestService', () => {
   let stateTransitionService: StateTransitionService;
   let stateService: StatesService;
   let i18nService: I18nService;
+  let actionLogBufferService: ActionLogBufferService;
+  let genericChangelogService: GenericChangelogService;
+  let changelogConfigFactory: ChangelogConfigFactory;
+
   const mockDataSource = {};
 
   beforeEach(async () => {
@@ -209,6 +219,18 @@ describe('AssessmentRequestService', () => {
           },
         },
         {
+          provide: ActionLogBufferService,
+          useValue: ActionLogBufferServiceMock,
+        },
+        {
+          provide: GenericChangelogService,
+          useValue: GenericChangelogServiceMock,
+        },
+        {
+          provide: ChangelogConfigFactory,
+          useValue: ChangelogConfigFactoryMock,
+        },
+        {
           provide: I18nService,
           useValue: {
             t: jest.fn().mockReturnValue('Mocked Translation'),
@@ -227,7 +249,7 @@ describe('AssessmentRequestService', () => {
     );
     groupMembershipRepository = module.get<GroupMembershipRepository>(
       GroupMembershipRepository,
-    ); //
+    );
     requestSpecItemRepository = module.get<RequestSpecItemRepository>(
       RequestSpecItemRepository,
     );

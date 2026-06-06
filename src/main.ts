@@ -46,28 +46,6 @@ async function bootstrap() {
     .setTitle('Sampa App')
     .setDescription('API description for SAMPA application')
     .setVersion('1.0')
-    .addBearerAuth(
-      {
-        description: `admin access token`,
-        name: 'Authorization',
-        bearerFormat: 'Bearer',
-        scheme: 'Bearer',
-        type: 'http',
-        in: 'header',
-      },
-      'adminAccessToken',
-    )
-    .addBearerAuth(
-      {
-        description: `idp token`,
-        name: 'Authorization',
-        bearerFormat: 'Bearer',
-        scheme: 'Bearer',
-        type: 'http',
-        in: 'header',
-      },
-      'idp-token',
-    )
     .build();
 
   const document = SwaggerModule.createDocument(app as any, config, {

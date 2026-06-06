@@ -1,5 +1,5 @@
 import { Controller, Get, Param, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Action } from 'src/common/decorators/action.decorator';
 import { Process } from 'src/common/decorators/process.decorator';
 import { ActionEnum } from 'src/common/enums/action.enum';
@@ -16,7 +16,6 @@ export class ActionLogController {
 
   //------------------------------
   @ApiOperation({ summary: 'Get Detailed Action Logs For Specific Asset' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(UserGuard, AuthorizationGuard)
   @Action(ActionEnum.Read)
   @Process(ProcessEnum.AssetManagement)

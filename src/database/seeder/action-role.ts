@@ -113,6 +113,18 @@ const actionsArray: {
         name: ActionEnum.ReadActionLog,
         process: ProcessEnum.AssessmentRequest,
       },
+      {
+        name: ActionEnum.ReadSpecs,
+        process: ProcessEnum.AssessmentLayer,
+      },
+      {
+        name: ActionEnum.ReadSpecs,
+        process: ProcessEnum.AssessmentRequest,
+      },
+      {
+        name: ActionEnum.ReadTestCaseAfterFirstIteration,
+        process: ProcessEnum.AssessmentRequest,
+      },
     ],
   },
   {
@@ -226,6 +238,22 @@ const actionsArray: {
       },
       {
         name: ActionEnum.ReadActionLog,
+        process: ProcessEnum.AssessmentRequest,
+      },
+      {
+        name: ActionEnum.ReadSpecs,
+        process: ProcessEnum.AssessmentLayer,
+      },
+      {
+        name: ActionEnum.ReadSpecs,
+        process: ProcessEnum.AssessmentRequest,
+      },
+      {
+        name: ActionEnum.ReadTestCaseAfterFirstIteration,
+        process: ProcessEnum.AssessmentRequest,
+      },
+      {
+        name: ActionEnum.ReadWhereIAmManager,
         process: ProcessEnum.AssessmentRequest,
       },
     ],
@@ -361,6 +389,18 @@ const actionsArray: {
         name: ActionEnum.ReadActionLog,
         process: ProcessEnum.AssessmentRequest,
       },
+      {
+        name: ActionEnum.ReadSpecs,
+        process: ProcessEnum.AssessmentLayer,
+      },
+      {
+        name: ActionEnum.ReadSpecs,
+        process: ProcessEnum.AssessmentRequest,
+      },
+      {
+        name: ActionEnum.ReadRemediate,
+        process: ProcessEnum.AssessmentLayer,
+      },
     ],
   },
   {
@@ -452,6 +492,14 @@ const actionsArray: {
         name: ActionEnum.ReadActionLog,
         process: ProcessEnum.AssessmentRequest,
       },
+      {
+        name: ActionEnum.ReadSpecs,
+        process: ProcessEnum.AssessmentLayer,
+      },
+      {
+        name: ActionEnum.ReadLayersForTeam,
+        process: ProcessEnum.AssessmentLayer,
+      },
     ],
   },
   {
@@ -529,6 +577,14 @@ const actionsArray: {
       {
         name: ActionEnum.ReadActionLog,
         process: ProcessEnum.AssessmentRequest,
+      },
+      {
+        name: ActionEnum.ReadSpecs,
+        process: ProcessEnum.AssessmentLayer,
+      },
+      {
+        name: ActionEnum.ReadLayersForTeam,
+        process: ProcessEnum.AssessmentLayer,
       },
     ],
   },
@@ -621,6 +677,14 @@ const actionsArray: {
         name: ActionEnum.ReadActionLog,
         process: ProcessEnum.AssessmentRequest,
       },
+      {
+        name: ActionEnum.ReadSpecs,
+        process: ProcessEnum.AssessmentLayer,
+      },
+      {
+        name: ActionEnum.ReadLayersForTeam,
+        process: ProcessEnum.AssessmentLayer,
+      },
     ],
   },
   {
@@ -698,6 +762,14 @@ const actionsArray: {
       {
         name: ActionEnum.ReadActionLog,
         process: ProcessEnum.AssessmentRequest,
+      },
+      {
+        name: ActionEnum.ReadSpecs,
+        process: ProcessEnum.AssessmentLayer,
+      },
+      {
+        name: ActionEnum.ReadLayersForTeam,
+        process: ProcessEnum.AssessmentLayer,
       },
     ],
   },
@@ -790,6 +862,14 @@ const actionsArray: {
         name: ActionEnum.ReadActionLog,
         process: ProcessEnum.AssessmentRequest,
       },
+      {
+        name: ActionEnum.ReadSpecs,
+        process: ProcessEnum.AssessmentLayer,
+      },
+      {
+        name: ActionEnum.ReadLayersForTeam,
+        process: ProcessEnum.AssessmentLayer,
+      },
     ],
   },
   {
@@ -867,6 +947,14 @@ const actionsArray: {
       {
         name: ActionEnum.ReadActionLog,
         process: ProcessEnum.AssessmentRequest,
+      },
+      {
+        name: ActionEnum.ReadSpecs,
+        process: ProcessEnum.AssessmentLayer,
+      },
+      {
+        name: ActionEnum.ReadLayersForTeam,
+        process: ProcessEnum.AssessmentLayer,
       },
     ],
   },
@@ -959,6 +1047,14 @@ const actionsArray: {
         name: ActionEnum.ReadActionLog,
         process: ProcessEnum.AssessmentRequest,
       },
+      {
+        name: ActionEnum.ReadSpecs,
+        process: ProcessEnum.AssessmentLayer,
+      },
+      {
+        name: ActionEnum.ReadLayersForTeam,
+        process: ProcessEnum.AssessmentLayer,
+      },
     ],
   },
   {
@@ -1036,6 +1132,14 @@ const actionsArray: {
       {
         name: ActionEnum.ReadActionLog,
         process: ProcessEnum.AssessmentRequest,
+      },
+      {
+        name: ActionEnum.ReadSpecs,
+        process: ProcessEnum.AssessmentLayer,
+      },
+      {
+        name: ActionEnum.ReadLayersForTeam,
+        process: ProcessEnum.AssessmentLayer,
       },
     ],
   },
@@ -1128,6 +1232,14 @@ const actionsArray: {
         name: ActionEnum.ReadActionLog,
         process: ProcessEnum.AssessmentRequest,
       },
+      {
+        name: ActionEnum.ReadSpecs,
+        process: ProcessEnum.AssessmentLayer,
+      },
+      {
+        name: ActionEnum.ReadLayersForTeam,
+        process: ProcessEnum.AssessmentLayer,
+      },
     ],
   },
   {
@@ -1205,6 +1317,14 @@ const actionsArray: {
       {
         name: ActionEnum.ReadActionLog,
         process: ProcessEnum.AssessmentRequest,
+      },
+      {
+        name: ActionEnum.ReadSpecs,
+        process: ProcessEnum.AssessmentLayer,
+      },
+      {
+        name: ActionEnum.ReadLayersForTeam,
+        process: ProcessEnum.AssessmentLayer,
       },
     ],
   },

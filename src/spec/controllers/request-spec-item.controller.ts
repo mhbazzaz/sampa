@@ -9,12 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AdminGuard } from 'src/common/guards/admin.guard';
 import { UserGuard } from 'src/common/guards/user.guard';
 import { responseGenerator } from 'src/common/helpers/response-generator';
@@ -38,7 +33,6 @@ export class RequestSpecItemController {
   @ApiCreatedResponse({
     type: GetSpecDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Post('admin/spec-item')
   async create(@Body() data: CreateSpecItemDto): Promise<GetSpecDto> {
@@ -56,7 +50,6 @@ export class RequestSpecItemController {
   @ApiCreatedResponse({
     type: GetSpecDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Get('spec-item')
   async findAll(@Query() query: GetSpecItemDto) {
@@ -75,7 +68,6 @@ export class RequestSpecItemController {
   @ApiCreatedResponse({
     type: GetSpecDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Get('admin/spec-item')
   async findAllAdminScope(@Query() query: PaginationDto) {
@@ -99,7 +91,6 @@ export class RequestSpecItemController {
   @ApiCreatedResponse({
     type: GetSpecDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Get('admin/spec-item/filtered')
   async getFilteredRequestSpecItems(
@@ -120,7 +111,6 @@ export class RequestSpecItemController {
   @ApiCreatedResponse({
     type: GetSpecDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Get('admin/spec-item/:id')
   async findOneAdminScope(@Param('id') id: string) {
@@ -129,7 +119,7 @@ export class RequestSpecItemController {
       relations: {
         assessmentType: { assessmentLayers: true },
         assetType: true,
-        environment: true,
+        environments: true,
       },
     });
     return responseGenerator({
@@ -145,7 +135,6 @@ export class RequestSpecItemController {
   @ApiCreatedResponse({
     type: GetSpecDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Patch('admin/spec-item/:id')
   async update(@Param('id') id: string, @Body() data: UpdateSpecItemDto) {
@@ -165,7 +154,6 @@ export class RequestSpecItemController {
   @ApiCreatedResponse({
     type: GetSpecDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Delete('admin/spec-item/:id')
   remove(@Param('id') id: string) {
@@ -181,7 +169,6 @@ export class RequestSpecItemController {
   @ApiCreatedResponse({
     type: GetSpecDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Delete('admin/spec-item/:id/relations')
   removeRelations(@Param('id') id: string) {

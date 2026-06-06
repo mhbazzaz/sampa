@@ -8,12 +8,7 @@ import {
   SetMetadata,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentMemberRoles } from 'src/common/decorators/current-member-roles.decorators';
 import { CurrentMember } from 'src/common/decorators/current-member.decorators';
 import { ActionEnum } from 'src/common/enums/action.enum';
@@ -26,6 +21,7 @@ import { PaginationDto } from 'src/common/pagination-dto/pagination.dto';
 import { Member } from 'src/member/entities/member.entity';
 import { Role } from 'src/role/entities/role.entity';
 import { StateTransition } from 'src/state-transition/entities/state-transition.entity';
+import { FindAllAssessmentLayersQueryDto } from '../dto/input/find-all-assessment-layers-query.dto';
 import { UpdateAssessmentLayerAuditorsDto } from '../dto/input/update-assessment-layer-add-auditors.dto';
 import { UpdateAssessmentLayerAddSupervisorsDto } from '../dto/input/update-assessment-layer-add-supervisors.dto';
 import { UpdateRequestLayerStatusByActionDto } from '../dto/input/update-request-layer-status-by-action.dto';
@@ -46,7 +42,6 @@ export class AssessmentLayerController {
   @ApiCreatedResponse({
     type: StateTransition,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, [
@@ -74,7 +69,6 @@ export class AssessmentLayerController {
   @ApiCreatedResponse({
     type: StateTransition,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, [
@@ -99,7 +93,6 @@ export class AssessmentLayerController {
   @ApiOperation({
     summary: `Get Cartable, ${ActionEnum.ReadForTeam} ${ActionEnum.ReadMine} | ${ProcessEnum.AssessmentLayer}`,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, [
@@ -132,7 +125,6 @@ export class AssessmentLayerController {
     ${ActionEnum.LayerSpecOnboardingAccept} 
     | ${ProcessEnum.AssessmentLayer}`,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, [
@@ -164,7 +156,6 @@ export class AssessmentLayerController {
   @ApiOperation({
     summary: `Get Cartable, ${ActionEnum.ReadMine} ${ActionEnum.ReadForTeam} | ${ProcessEnum.AssessmentRequest}`,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, [
@@ -193,10 +184,33 @@ export class AssessmentLayerController {
   }
 
   //------------------------------
+  @UseGuards(AuthorizationGuard)
+  @UseGuards(UserGuard)
+  @SetMetadata(AuthorizationMetaDataEnum.Action, [ActionEnum.ReadLayersForTeam])
+  @SetMetadata(AuthorizationMetaDataEnum.Process, ProcessEnum.AssessmentLayer)
+  @Get('')
+  async getUsersTeamRequestsLayers(
+    @CurrentMember() member: Member,
+    @Query() query: FindAllAssessmentLayersQueryDto,
+    @CurrentMemberRoles() memberRoles: Role[],
+  ) {
+    const result = await this.assessmentLayerService.getUsersLayers(
+      query,
+      member,
+      memberRoles,
+    );
+
+    return responseGenerator({
+      statusCode: 200,
+      message: 'successful',
+      data: { data: result[0], count: result[1] },
+    });
+  }
+
+  //------------------------------
   @ApiOperation({
     summary: `Update One Assessment Layer status by action, ${ActionEnum.PendingLayerTestcasesSubmit} | ${ProcessEnum.AssessmentLayer}`,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, [
@@ -221,7 +235,6 @@ export class AssessmentLayerController {
   }
 
   //------------------------------
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, [
@@ -261,7 +274,6 @@ export class AssessmentLayerController {
   }
 
   //------------------------------
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, [
@@ -289,7 +301,6 @@ export class AssessmentLayerController {
   @ApiOperation({
     summary: `Update One Assessment Layer status by action, ${ActionEnum.LayerReEvaluationRequestedAccept} ${ActionEnum.LayerReEvaluationRequestedReject} | ${ProcessEnum.AssessmentLayer}`,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, [

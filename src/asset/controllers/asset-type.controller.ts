@@ -9,12 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentMember } from 'src/common/decorators/current-member.decorators';
 import { AdminGuard } from 'src/common/guards/admin.guard';
 import { InternalCommunicationGuard } from 'src/common/guards/internal-communication.guard';
@@ -38,7 +33,6 @@ export class AssetTypeController {
   @ApiCreatedResponse({
     type: AssetType,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Post('admin/asset-type')
   async create(@Body() data: CreateAssetTypeDto): Promise<GetAssetDto> {
@@ -56,7 +50,6 @@ export class AssetTypeController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Get('admin/asset-type')
   async findAllAdminScope(@Query() query: PaginationDto) {
@@ -94,7 +87,6 @@ export class AssetTypeController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Get('admin/asset-type/:id')
   async findOneAdminScope(@Param('id') id: string): Promise<GetAssetDto> {
@@ -112,7 +104,6 @@ export class AssetTypeController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Get('asset-type/:id')
   async findOneUserScope(
@@ -133,7 +124,6 @@ export class AssetTypeController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Patch('admin/asset-type/:id')
   async update(@Param('id') id: string, @Body() data: UpdateAssetTypeDto) {
@@ -151,7 +141,6 @@ export class AssetTypeController {
   @ApiCreatedResponse({
     type: GetAssetDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Delete('admin/asset-type/:id')
   remove(@Param('id') id: string) {

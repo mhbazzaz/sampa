@@ -1,10 +1,5 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AdminGuard } from 'src/common/guards/admin.guard';
 import { UserGuard } from 'src/common/guards/user.guard';
 import { responseGenerator } from 'src/common/helpers/response-generator';
@@ -22,7 +17,6 @@ export class AssessmentTypeController {
   @ApiCreatedResponse({
     type: GetAssessmentDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Get('admin/assessment-type')
   async findAllAdminScope(@Query() query: PaginationDto) {
@@ -43,7 +37,6 @@ export class AssessmentTypeController {
   @ApiCreatedResponse({
     type: GetAssessmentDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Get('assessment-type')
   async findAll(@Query() query: PaginationDto) {

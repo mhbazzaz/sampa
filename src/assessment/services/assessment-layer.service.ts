@@ -11,6 +11,7 @@ import { ActionLogStatusEnum } from 'src/common/enums/action-log.enum';
 import { ActionEnum } from 'src/common/enums/action.enum';
 import { ProcessEnum } from 'src/common/enums/process.enum';
 import { userMapperLevel1 } from 'src/common/helpers/user-mapper-level-1';
+import { GroupMembershipRepository } from 'src/group-membership/repositories/group-membership.repository';
 import { LayerComment } from 'src/layer-comment/entities/layer-comment.entity';
 import { Member } from 'src/member/entities/member.entity';
 import { MemberRepository } from 'src/member/repositories/member.repository';
@@ -23,6 +24,7 @@ import { StatesRepository } from 'src/states/repositories/state.repository';
 import { TestcaseContent } from 'src/test-case/entities/testcase-content.entity';
 import { TestcaseItem } from 'src/test-case/entities/testcase-item.entity';
 import { DataSource, In, QueryRunner } from 'typeorm';
+import { FindAllAssessmentLayersQueryDto } from '../dto/input/find-all-assessment-layers-query.dto';
 import { UpdateAssessmentLayerAuditorsDto } from '../dto/input/update-assessment-layer-add-auditors.dto';
 import { UpdateAssessmentLayerAddSupervisorsDto } from '../dto/input/update-assessment-layer-add-supervisors.dto';
 import { UpdateRequestLayerStatusByActionDto } from '../dto/input/update-request-layer-status-by-action.dto';
@@ -48,6 +50,7 @@ export class AssessmentLayerService {
     private readonly i18nService: I18nService,
     private readonly actionRepository: ActionRepository,
     private readonly dataSource: DataSource,
+    private readonly groupMembershipRepository: GroupMembershipRepository,
     private readonly actionLogBufferService: ActionLogBufferService,
   ) {}
 
@@ -344,10 +347,10 @@ export class AssessmentLayerService {
   }
 
   //------------------------------
-  async getOneAssessmentLayer(
-    layerId: string,
+  async getUsersLayers(
+    query: FindAllAssessmentLayersQueryDto,
+    member: Member,
     memberRoles: Role[],
-    memberId: string,
   ) {
     const actions = await this.actionRepository.findAll({
       select: { id: true, name: true, process: { name: true } },
@@ -356,76 +359,26 @@ export class AssessmentLayerService {
         roles: { id: In(memberRoles.map((memberRole) => memberRole.id)) },
       },
     });
-
-    const isApplicantOrApplicantManager = memberRoles.findIndex((memberRole) =>
-      ['applicant', 'applicant manager'].includes(memberRole.name),
+    return this.assessmentLayerRepository.getUsersLayers(
+      query,
+      member,
+      memberRoles,
+      actions,
     );
+  }
 
-    const isCiso = memberRoles.findIndex(
-      (memberRole) => memberRole.name === 'ciso',
-    );
-
-    const isAuditor = memberRoles.findIndex((memberRole) =>
-      memberRole.name.includes('auditor'),
-    );
-
-    const isSupervisor = memberRoles.findIndex((memberRole) =>
-      memberRole.name.includes('supervisor'),
-    );
-
-    const isOperator = memberRoles.findIndex((memberRole) =>
-      memberRole.name.includes('operator'),
-    );
-
-    const hasReadAccess = actions.some(
-      (action) =>
-        action.name === ActionEnum.Read &&
-        action.process?.name === ProcessEnum.AssessmentLayer,
-    );
-
-    if (!hasReadAccess && isApplicantOrApplicantManager === -1) {
-      const teams = await this.assessmentTeamRepository.findAll({
-        where: { memberId },
-        relations: { assessmentLayer: true },
-      });
-
-      if (
-        teams.findIndex((team) => team.assessmentLayer!.id === layerId) === -1
-      ) {
-        throw new NotFoundException(
-          this.i18nService.t('messages.ERROR_NOT_FOUND_PROPERTY', {
-            args: { property: 'layer' },
-          }),
-        );
-      }
-    }
-
-    const layer = await this.assessmentLayerRepository.findOne({
-      where: {
-        id: layerId,
-        assessmentRequest:
-          isApplicantOrApplicantManager > -1 &&
-          !isAuditor &&
-          !isCiso &&
-          !isSupervisor &&
-          isOperator
-            ? [{ applicantId: memberId }, { applicantManagerId: memberId }]
-            : undefined,
-      },
-      relations: {
-        assessmentRequest: {
-          asset: true,
-          requestSpecContents: true,
-          testcaseContents: {
-            testcaseItem: { testcaseGroup: true },
-          },
-          environment: true,
-        },
-        assessmentType: true,
-        state: true,
-        assessmentTeams: { member: true },
-      },
-    });
+  //------------------------------
+  async getOneAssessmentLayer(
+    layerId: string,
+    memberRoles: Role[],
+    memberId: string,
+  ) {
+    const layer =
+      await this.assessmentLayerRepository.getOneAssessmentLayerQueryBuilder(
+        layerId,
+        memberRoles,
+        memberId,
+      );
 
     if (!layer) {
       throw new NotFoundException(
@@ -684,10 +637,15 @@ export class AssessmentLayerService {
     await queryRunner.startTransaction();
 
     try {
+      let iterationCount = requestLayer.iterationCount;
+      if (data.action === ActionEnum.LayerAssessmentReviewAccept) {
+        iterationCount = iterationCount + 1;
+      }
+
       await queryRunner.manager.update(
         AssessmentLayer,
         { id: layerId },
-        { stateId: stateTransition.id },
+        { stateId: stateTransition.id, iterationCount: iterationCount },
       );
 
       let nextRequestState: string | undefined;

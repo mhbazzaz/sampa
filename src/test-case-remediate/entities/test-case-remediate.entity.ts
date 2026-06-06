@@ -27,8 +27,8 @@ export class TestcaseRemediate extends AbstractEntity<TestcaseRemediate> {
   @Column({ type: String, nullable: true })
   references: string | null;
 
-  @Column()
-  dueDate: Date;
+  @Column({ nullable: true, type: Date })
+  dueDate: Date | null;
 
   @Column()
   memberId: string;

@@ -41,6 +41,6 @@ export class CreateTestcaseRemediateDto {
   @ApiProperty()
   @IsDate({ message: i18nValidationMessage('validation.IsDate') })
   @Type(() => Date)
-  @IsNotEmpty({ message: i18nValidationMessage('validation.IsNotEmpty') })
+  @IsOptional()
   dueDate: Date;
 }

@@ -69,4 +69,12 @@ export enum ActionEnum {
   ApplicantManagerTeamup = 'applicant manager teamup',
   ReadVulnerabilityCount = 'Read Vulnerability Count',
   ReadActionLog = 'Read Action Log',
+  ReadSpecs = 'read specs',
+  ReadRemediate = 'read_remediate',
+  ReadTestCaseMine = 'read test case mine',
+  ReadTestCaseAfterFirstIteration = 'Read Test Case After First Iteration',
+  ReadTestCase = 'read test case',
+  ReadLayers = 'read layers',
+  ReadWhereIAmManager = 'read where I am manager',
+  ReadLayersForTeam = 'read layers for team',
 }

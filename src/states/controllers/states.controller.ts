@@ -1,10 +1,5 @@
 import { Controller, Get, Query, SetMetadata, UseGuards } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ActionEnum } from 'src/common/enums/action.enum';
 import { AuthorizationMetaDataEnum } from 'src/common/enums/authorization-meta-data.enum';
 import { ProcessEnum } from 'src/common/enums/process.enum';
@@ -25,7 +20,6 @@ export class StatesController {
   @ApiCreatedResponse({
     type: GetStatesDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, [
@@ -45,7 +39,6 @@ export class StatesController {
 
   //------------------------------
   @ApiOperation({ summary: 'Get All States For User Scope' })
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Get('ordered')
   async findAllStatesOrdered() {

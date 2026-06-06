@@ -12,9 +12,7 @@ import { Not } from 'typeorm';
 
 @ValidatorConstraint({ async: true })
 @Injectable()
-export class CheckTestcaseGroupExistValidator
-  implements ValidatorConstraintInterface
-{
+export class CheckTestcaseGroupExistValidator implements ValidatorConstraintInterface {
   constructor(
     private readonly testcaseGroupService: TestcaseGroupService,
     private readonly i18nService: I18nService,

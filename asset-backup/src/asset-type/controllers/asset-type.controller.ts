@@ -47,7 +47,6 @@ export class AssetTypeController {
 
   //------------------------------
   @ApiOperation({ summary: 'Create Asset Type' })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiTags('Admin / Asset-Type')
   @Post('admin/asset-type')
@@ -69,7 +68,6 @@ export class AssetTypeController {
     required: true,
     description: 'The id of the asset type to get versions for',
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Get('admin/asset-type/archives/:id')
   async getAssetTypeArchives(@Param('id') id: string) {
@@ -84,7 +82,6 @@ export class AssetTypeController {
   //------------------------------
   @ApiOperation({ summary: 'Get All Asset Type With Filter' })
   @ApiTags('Admin / Asset-Type')
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Get('admin/asset-type')
   async findAll(@Query() query: FindAllAssetTypeQueryDto) {
@@ -98,7 +95,6 @@ export class AssetTypeController {
 
   //------------------------------
   @ApiOperation({ summary: 'Get One Asset Type' })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiTags('Admin / Asset-Type')
   @Get('admin/asset-type/:id')
@@ -113,7 +109,6 @@ export class AssetTypeController {
 
   //------------------------------
   @ApiOperation({ summary: 'Get One Asset Type Version' })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiTags('Admin / Asset-Type')
   @Get('admin/asset-type/version/:id')
@@ -128,7 +123,6 @@ export class AssetTypeController {
 
   //------------------------------
   @ApiOperation({ summary: 'Get One Asset Type Version' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Read)
@@ -146,7 +140,6 @@ export class AssetTypeController {
 
   //------------------------------
   @ApiOperation({ summary: 'Update Asset Type' })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiTags('Admin / Asset-Type')
   @UseInterceptors(ModifyPatchRequestBodyInterceptors)
@@ -174,7 +167,6 @@ export class AssetTypeController {
       },
     },
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiTags('Admin / Asset-Type')
   @ApiConsumes('multipart/form-data')
@@ -195,7 +187,6 @@ export class AssetTypeController {
 
   //----------------------------------
   @ApiOperation({ summary: 'Remove Asset Type by ID' })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiTags('Admin / Asset-Type')
   @Delete('admin/asset-type/:id')
@@ -205,7 +196,6 @@ export class AssetTypeController {
 
   //------------------------------
   @ApiOperation({ summary: 'Get All Filter For AssetType' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Read)
@@ -223,7 +213,6 @@ export class AssetTypeController {
 
   //------------------------------
   @ApiOperation({ summary: 'Get All Asset Type' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(UserGuard)
   @ApiTags('Asset-Type')
   @Get('asset-type/asset-type-for-sampa')
@@ -247,7 +236,6 @@ export class AssetTypeController {
 
   //------------------------------
   @ApiOperation({ summary: 'Get One Asset Type' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Read)
@@ -265,7 +253,6 @@ export class AssetTypeController {
 
   //------------------------------
   @ApiOperation({ summary: 'Get One Asset Type' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Read)
@@ -290,7 +277,6 @@ export class AssetTypeController {
 
   //------------------------------
   @ApiOperation({ summary: 'Get One Asset Type' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Read)
@@ -311,7 +297,6 @@ export class AssetTypeController {
   @ApiOperation({
     summary: 'Get All Asset Type User Scope With Dynamic Filter',
   })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Read)
@@ -331,7 +316,6 @@ export class AssetTypeController {
   @ApiOperation({
     summary: 'Get Related Asset Types And Asset Categories With AssetTypeId',
   })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Read)

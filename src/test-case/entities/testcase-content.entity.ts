@@ -9,8 +9,8 @@ import { TestcaseItem } from './testcase-item.entity';
 
 @Entity()
 export class TestcaseContent extends AbstractEntity<TestcaseContent> {
-  @Column()
-  observations: string;
+  @Column({ nullable: true, type: String })
+  observations: string | null;
 
   @Column()
   proves: string;

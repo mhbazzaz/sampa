@@ -1,7 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { I18nService } from 'nestjs-i18n';
-import { ActionLogRepositoryMock } from 'src/action-log/__mock__/request-spec-content.repository';
+import { ActionLogBufferServiceMock } from 'src/action-log/__mock__/action-log-buffer.service';
+import { ActionLogRepositoryMock } from 'src/action-log/__mock__/action-log.repository';
 import { ActionLogRepository } from 'src/action-log/repositories/action-log.repository';
+import { ActionLogBufferService } from 'src/action-log/services/action-log-buffer.service';
 import { ActionRepositoryMock } from 'src/action/__mocks__/action.repository';
 import { ActionRepository } from 'src/action/repositories/action.repository';
 import { AssessmentLayerRepositoryMock } from 'src/assessment/__mocks__/assessment-layer.repository';
@@ -84,6 +86,10 @@ describe('RequestSpecContentService', () => {
         {
           provide: AssetService,
           useValue: AssetServiceMock,
+        },
+        {
+          provide: ActionLogBufferService,
+          useValue: ActionLogBufferServiceMock,
         },
         {
           provide: I18nService,

@@ -31,7 +31,7 @@ export class RequestSpecItemRepository extends AbstractRepository<RequestSpecIte
       .leftJoinAndSelect('requestSpecItem.assessmentType', 'assessmentType')
       .leftJoinAndSelect('assessmentType.assessmentLayers', 'assessmentLayers')
       .leftJoinAndSelect('requestSpecItem.assetType', 'assetType')
-      .leftJoinAndSelect('requestSpecItem.environment', 'environment');
+      .leftJoinAndSelect('requestSpecItem.environments', 'environments');
 
     if (query.assetTypeId) {
       qb.andWhere('requestSpecItem.assetTypeId = :assetTypeId', {
@@ -39,9 +39,9 @@ export class RequestSpecItemRepository extends AbstractRepository<RequestSpecIte
       });
     }
 
-    if (query.environmentId) {
-      qb.andWhere('requestSpecItem.environmentId = :environmentId', {
-        environmentId: query.environmentId,
+    if (query.environmentIds) {
+      qb.andWhere('environments.id IN (:...environmentIds)', {
+        environmentIds: query.environmentIds,
       });
     }
 

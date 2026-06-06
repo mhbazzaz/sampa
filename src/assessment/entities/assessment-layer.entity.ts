@@ -37,6 +37,9 @@ export class AssessmentLayer extends AbstractEntity<AssessmentLayer> {
   @ManyToOne(() => AssessmentType)
   assessmentType?: AssessmentType;
 
+  @Column({ default: 0 })
+  iterationCount: number;
+
   @OneToMany(
     () => AssessmentTeam,
     (assessmentTeam) => assessmentTeam.assessmentLayer,

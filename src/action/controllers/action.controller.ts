@@ -12,7 +12,6 @@ export class ActionController {
   // @ApiCreatedResponse({
   //   type: GetActionDto,
   // })
-  // @ApiBearerAuth('idp-token')
   // @UseGuards(UserGuard)
   // @Post('')
   // async create(@Body() data: CreateActionDto): Promise<GetActionDto> {
@@ -29,7 +28,6 @@ export class ActionController {
   // @ApiCreatedResponse({
   //   type: GetActionDto,
   // })
-  // @ApiBearerAuth('idp-token')
   // @UseGuards(UserGuard)
   // @Get('')
   // async findAll(@Query() query: PaginationDto) {
@@ -49,7 +47,6 @@ export class ActionController {
   // @ApiCreatedResponse({
   //   type: GetActionDto,
   // })
-  // @ApiBearerAuth('idp-token')
   // @UseGuards(UserGuard)
   // @Get(':id')
   // async findOne(@Param('id') id: string): Promise<GetActionDto> {
@@ -66,7 +63,6 @@ export class ActionController {
   // @ApiCreatedResponse({
   //   type: GetActionDto,
   // })
-  // @ApiBearerAuth('idp-token')
   // @UseGuards(UserGuard)
   // @Patch(':id')
   // async update(@Param('id') id: string, @Body() data: UpdateActionDto) {
@@ -83,7 +79,6 @@ export class ActionController {
   // @ApiCreatedResponse({
   //   type: GetActionDto,
   // })
-  // @ApiBearerAuth('idp-token')
   // @UseGuards(UserGuard)
   // @Delete(':id')
   // remove(@Param('id') id: string) {

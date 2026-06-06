@@ -49,6 +49,7 @@ import { FindAllAssetQueryDto } from '../dto/input/find-all-asset-query.dto';
 import { findAllAssetReportQueryDto } from '../dto/input/find-all-asset-report.query.dto';
 import { FindAllAssetQueryWithOutPaginateDto } from '../dto/input/find-all-asset-without-paginate.dto';
 import { GetFilteredAssetVersions } from '../dto/input/get-filtered-asset-versions.dto';
+import { GetLogSourceGroupsDTO } from '../dto/input/get-log-source-groups.dto';
 import { UpdateAssetDto } from '../dto/input/update-asset.dto';
 import { CreatedAssetFromFileResponseDto } from '../dto/response/created-from-file-response.dto';
 import { AssetVersion } from '../entities/asset-version.entity';
@@ -56,6 +57,7 @@ import { Asset } from '../entities/asset.entity';
 import { AssetRelationRepository } from '../repositories/asset-relation.repository';
 import { AssetVersionRepository } from '../repositories/asset-version.repository';
 import { AssetRepository } from '../repositories/asset.repository';
+import { groups, logSourceType, protocolType } from './log-source-type';
 
 export interface searchBody {
   [name: string]: searchBody | string;
@@ -310,6 +312,10 @@ export class AssetService {
     let logStatus: ActionLogStatusEnum = ActionLogStatusEnum.FAILED;
 
     try {
+      if (existingAssetTypeVersion.assetType?.name === 'Log Source') {
+        // @TODO
+      }
+
       createdVersion = await this.assetRepository.createAssetWithVersions(
         data,
         tags,
@@ -3064,5 +3070,94 @@ export class AssetService {
       queryOptions,
       user.id,
     );
+  }
+
+  //------------------------------
+  async getLogSourceTypes(query: GetLogSourceGroupsDTO, user: User) {
+    let logSourceTypeToReturn = logSourceType;
+    if (query.label) {
+      logSourceTypeToReturn = logSourceTypeToReturn.filter((logSourceType) =>
+        logSourceType.name
+          .toLowerCase()
+          .includes(query.label.toLocaleLowerCase()),
+      );
+    }
+    return [
+      logSourceTypeToReturn
+        .sort((logSourceType) => logSourceType.id)
+        .map((logSourceType) => {
+          return {
+            label: logSourceType.name,
+            value: { ID: logSourceType.id, Name: logSourceType.name },
+          };
+        })
+        .splice(query.skip, query.take),
+      logSourceTypeToReturn.length,
+    ];
+  }
+
+  //------------------------------
+  async getLogSourceGroups(query: GetLogSourceGroupsDTO, user: User) {
+    let groupsToReturn = groups;
+
+    if (query.label) {
+      groupsToReturn = groupsToReturn.filter((protocolType) =>
+        protocolType.name
+          .toLowerCase()
+          .includes(query.label.toLocaleLowerCase()),
+      );
+    }
+
+    return [
+      groupsToReturn
+        .sort((logSourceType) => logSourceType.id)
+        .map((logSourceType) => {
+          return {
+            label: logSourceType.name,
+            value: { ID: logSourceType.id, Name: logSourceType.name },
+          };
+        })
+        .splice(query.skip, query.take),
+      groupsToReturn.length,
+    ];
+  }
+
+  //------------------------------
+  async getLogSourceProtocols(
+    query: GetLogSourceGroupsDTO,
+    typeId: string,
+    user: User,
+  ) {
+    const logSource = logSourceType
+      .find((logSourceType) => logSourceType.id === +typeId)
+      ?.protocol_types.map((protocolType) => protocolType.protocol_id);
+
+    if (!logSource) {
+      return [[], 0];
+    }
+    let protocolTypeToReturn = protocolType.filter((protocolType) =>
+      logSource.includes(protocolType.id),
+    );
+
+    if (query.label) {
+      protocolTypeToReturn = protocolTypeToReturn.filter((protocolType) =>
+        protocolType.name
+          .toLowerCase()
+          .includes(query.label.toLocaleLowerCase()),
+      );
+    }
+
+    return [
+      protocolTypeToReturn
+        .sort((logSourceType) => logSourceType.id)
+        .map((logSourceType) => {
+          return {
+            label: logSourceType.name,
+            value: { ID: logSourceType.id, Name: logSourceType.name },
+          };
+        })
+        .splice(query.skip, query.take),
+      protocolTypeToReturn.length,
+    ];
   }
 }

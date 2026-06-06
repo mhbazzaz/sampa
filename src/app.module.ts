@@ -2,6 +2,7 @@ import { MiddlewareConsumer, Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ActionLogModule } from './action-log/action-log.module';
+import { CleanupPendingChangesJob } from './action-log/jobs/cleanup-pending-changes.job';
 import { ActionModule } from './action/action.module';
 import { AssessmentModule } from './assessment/assessment.module';
 import { AssetModule } from './asset/asset.module';
@@ -23,7 +24,7 @@ import { RoleModule } from './role/role.module';
 import { SpecCommentsModule } from './spec-comment/spec-comment.module';
 import { SpecModule } from './spec/spec.module';
 import { StateTransitionModule } from './state-transition/state-transition.module';
-import { TestCaseCommentsModule } from './test-cace-comment/test-cace-comment.module';
+import { TestCaseCommentsModule } from './test-cace-comment/test-case-comment.module';
 import { TestcaseRemediateModule } from './test-case-remediate/test-case-remediate.module';
 import { TestcaseModule } from './test-case/test-case.module';
 
@@ -34,7 +35,6 @@ import { TestcaseModule } from './test-case/test-case.module';
     LoggerModule,
     AppI18nModule,
     ActionLogModule,
-
     GroupMembershipModule,
     GroupModule,
     AssetModule,
@@ -58,7 +58,7 @@ import { TestcaseModule } from './test-case/test-case.module';
     RemediateCommentModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [CleanupPendingChangesJob],
 })
 export class AppModule {
   configure(consumer: MiddlewareConsumer) {

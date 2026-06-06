@@ -1,6 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { I18nService } from 'nestjs-i18n';
+import { ActionLogBufferServiceMock } from 'src/action-log/__mock__/action-log-buffer.service';
+import { ActionLogBufferService } from 'src/action-log/services/action-log-buffer.service';
 import { AssessmentRequestRepositoryMock } from 'src/assessment/__mocks__/assessment-request.repository';
 import { AssessmentRequestRepository } from 'src/assessment/repositories/assessment-request.repository';
 import { ContentStatus } from 'src/common/enums/test-case-content-status.enum';
@@ -33,6 +35,10 @@ describe('TestcaseContentService', () => {
         {
           provide: AssessmentRequestRepository,
           useValue: AssessmentRequestRepositoryMock,
+        },
+        {
+          provide: ActionLogBufferService,
+          useValue: ActionLogBufferServiceMock,
         },
         {
           provide: I18nService,

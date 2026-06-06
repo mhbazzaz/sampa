@@ -10,4 +10,10 @@ export class FindAllStatesQueryDto {
   @Transform(({ value }) => value || undefined)
   @IsOptional()
   processId: string;
+
+  @ApiPropertyOptional()
+  @IsString({ message: i18nValidationMessage('validation.IsString') })
+  @Transform(({ value }) => value || undefined)
+  @IsOptional()
+  processName: string;
 }

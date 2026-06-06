@@ -10,7 +10,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Action } from 'src/common/decorators/action.decorator';
 import { CurrentUser } from 'src/common/decorators/current-user.decorators';
 import { Process } from 'src/common/decorators/process.decorator';
@@ -35,7 +35,6 @@ export class AssetCategoryController {
 
   //------------------------------
   @ApiOperation({ summary: 'Create Asset Category' })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiTags('Admin / Asset-Category')
   @Post('admin/asset-category')
@@ -50,7 +49,6 @@ export class AssetCategoryController {
 
   //------------------------------
   @ApiOperation({ summary: 'Get All Asset Category' })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiTags('Admin / Asset-Category')
   @Get('admin/asset-category')
@@ -65,7 +63,6 @@ export class AssetCategoryController {
 
   //------------------------------
   @ApiOperation({ summary: 'Get One Asset Category' })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiTags('Admin / Asset-Category')
   @Get('admin/asset-category/:id')
@@ -80,7 +77,6 @@ export class AssetCategoryController {
 
   //------------------------------
   @ApiOperation({ summary: 'Update Asset Category' })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiTags('Admin / Asset-Category')
   @UseInterceptors(ModifyPatchRequestBodyInterceptors)
@@ -96,7 +92,6 @@ export class AssetCategoryController {
 
   //----------------------------------
   @ApiOperation({ summary: 'Remove Asset Category by ID' })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiTags('Admin / Asset-Category')
   @Delete('admin/asset-category/:id')
@@ -106,7 +101,6 @@ export class AssetCategoryController {
 
   //------------------------------
   @ApiOperation({ summary: 'Get All Asset Category' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Read)
@@ -128,7 +122,6 @@ export class AssetCategoryController {
 
   //------------------------------
   @ApiOperation({ summary: 'Get All Asset Category' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(UserGuard)
   @ApiTags('Asset-Category')
   @Get('asset-category/asset-category-for-sampa')

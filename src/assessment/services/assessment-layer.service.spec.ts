@@ -9,6 +9,7 @@ import { ProcessEnum } from 'src/common/enums/process.enum';
 import { RequestFinalStateEnum } from 'src/common/enums/request-final-state.enum';
 import { userMapperLevel1Mock } from 'src/common/helpers/__mocks__/user-mapper-level-1';
 import { userMapperLevel1 } from 'src/common/helpers/user-mapper-level-1';
+import { GroupMembershipRepository } from 'src/group-membership/repositories/group-membership.repository';
 import { Member } from 'src/member/entities/member.entity';
 import { MemberRepository } from 'src/member/repositories/member.repository';
 import { ProcessRepository } from 'src/process/repositories/process.repository';
@@ -24,6 +25,8 @@ import { AssessmentLayerRepository } from '../repositories/assessment-layer.repo
 import { AssessmentRequestRepository } from '../repositories/assessment-request.repository';
 import { AssessmentTeamRepository } from '../repositories/assessment-team.repository';
 import { AssessmentLayerService } from './assessment-layer.service';
+import { ActionLogBufferService } from 'src/action-log/services/action-log-buffer.service';
+import { ActionLogBufferServiceMock } from 'src/action-log/__mock__/action-log-buffer.service';
 
 jest.mock('../../vault/vault', () => ({
   Vault: {
@@ -120,6 +123,13 @@ describe('AssessmentLayerService', () => {
           },
         },
         {
+          provide: GroupMembershipRepository,
+          useValue: {
+            findOne: jest.fn(),
+            findOneBy: jest.fn(),
+          },
+        },
+        {
           provide: ProcessRepository,
           useValue: {
             findOne: jest.fn(),
@@ -164,6 +174,10 @@ describe('AssessmentLayerService', () => {
         {
           provide: userMapperLevel1,
           useValue: userMapperLevel1Mock,
+        },
+        {
+          provide: ActionLogBufferService,
+          useValue: ActionLogBufferServiceMock,
         },
         { provide: DataSource, useValue: dataSource },
       ],
@@ -780,6 +794,7 @@ describe('AssessmentLayerService', () => {
         const fakeLayer = {
           id: 'layer-1',
           stateId: '1',
+          iterationCount: 0,
           assessmentRequest: {
             id: 'req-1',
             requestNumber: 'REQ-2025-001',
@@ -845,6 +860,7 @@ describe('AssessmentLayerService', () => {
       it('should also update assessment request state when all layers match', async () => {
         const fakeLayer = {
           id: 'layer-1',
+          iterationCount: 0,
           stateId: 'current-state',
           assessmentRequest: {
             id: 'req-1',
@@ -930,6 +946,7 @@ describe('AssessmentLayerService', () => {
         assessmentLayerRepository.findOne.mockResolvedValue({
           id: 'layer-1',
           stateId: '1',
+          iterationCount: 0,
           assessmentRequestId: 'request-id',
           assessmentTypeId: 'type-id',
           createdAt: new Date(),
@@ -983,6 +1000,7 @@ describe('AssessmentLayerService', () => {
         const fakeLayer = {
           id: 'layer-1',
           stateId: '1',
+          iterationCount: 0,
           assessmentRequest: {
             id: 'req-1',
             requestNumber: 'REQ-2025-001',
@@ -1038,7 +1056,7 @@ describe('AssessmentLayerService', () => {
         expect(queryRunner.manager.update).toHaveBeenCalledWith(
           AssessmentLayer,
           { id: 'layer-1' },
-          { stateId: '99' },
+          { stateId: '99', iterationCount: 0 },
         );
 
         expect(queryRunner.commitTransaction).toHaveBeenCalled();

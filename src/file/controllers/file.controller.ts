@@ -13,7 +13,6 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
-  ApiBearerAuth,
   ApiBody,
   ApiConsumes,
   ApiOperation,
@@ -63,7 +62,6 @@ export class FileController {
     description: 'File has been saved successfully!',
     type: FileResponseDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, ActionEnum.InitiatedSave)
@@ -107,7 +105,6 @@ export class FileController {
       required: ['file'],
     },
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @ApiConsumes('multipart/form-data')
@@ -147,7 +144,6 @@ export class FileController {
       required: ['file'],
     },
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AdminGuard)
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(
@@ -177,7 +173,6 @@ export class FileController {
     description: 'File has been downloaded successfully!',
     type: FileResponseDto,
   })
-  // @ApiBearerAuth('idp-token')
   // @UseGuards(AuthorizationGuard)
   // @UseGuards(UserGuard)
   // @SetMetadata(AuthorizationMetaDataEnum.Action, ActionEnum.Read)

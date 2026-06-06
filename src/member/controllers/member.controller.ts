@@ -1,10 +1,5 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentMember } from 'src/common/decorators/current-member.decorators';
 import { UserGuard } from 'src/common/guards/user.guard';
 import { responseGenerator } from 'src/common/helpers/response-generator';
@@ -19,7 +14,6 @@ export class MemberController {
   constructor(private readonly memberService: MemberService) {}
 
   //------------------------------
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Get('current-member')
   async currentUser(@CurrentMember() member: Member) {
@@ -36,7 +30,6 @@ export class MemberController {
   @ApiCreatedResponse({
     type: GetMemberDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Get('')
   async findAll(@Query() query: FindAllQueryDto) {

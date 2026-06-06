@@ -8,12 +8,7 @@ import {
   SetMetadata,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentMember } from 'src/common/decorators/current-member.decorators';
 import { ActionEnum } from 'src/common/enums/action.enum';
 import { AuthorizationMetaDataEnum } from 'src/common/enums/authorization-meta-data.enum';
@@ -42,7 +37,6 @@ export class GroupMembershipController {
   @ApiCreatedResponse({
     type: GetGroupMembershipDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(
@@ -67,7 +61,6 @@ export class GroupMembershipController {
   // @ApiCreatedResponse({
   //   type: GetGroupMembershipDto,
   // })
-  // @ApiBearerAuth('idp-token')
   // @UseGuards(UserGuard)
   // @Get('')
   // async findAll(@Query() query: PaginationDto) {
@@ -87,7 +80,6 @@ export class GroupMembershipController {
   // @ApiCreatedResponse({
   //   type: GetGroupMembershipDto,
   // })
-  // @ApiBearerAuth('idp-token')
   // @UseGuards(UserGuard)
   // @Get(':id')
   // async findOne(@Param('id') id?: string): Promise<GetGroupMembershipDto> {
@@ -106,7 +98,6 @@ export class GroupMembershipController {
   @ApiCreatedResponse({
     type: GetGroupMembershipDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(
@@ -135,7 +126,6 @@ export class GroupMembershipController {
   @ApiCreatedResponse({
     type: GetGroupMembershipDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(
@@ -161,7 +151,6 @@ export class GroupMembershipController {
   // @ApiCreatedResponse({
   //   type: GetGroupMembershipDto,
   // })
-  // @ApiBearerAuth('idp-token')
   // @UseGuards(UserGuard)
   // @Delete(':id')
   // remove(@Param('id') id: string) {

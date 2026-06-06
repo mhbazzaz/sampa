@@ -6,6 +6,7 @@ import {
 import { I18nService } from 'nestjs-i18n';
 import * as sanitizeHtml from 'sanitize-html';
 import { PaginationDto } from 'src/common/pagination-dto/pagination.dto';
+import { Role } from 'src/role/entities/role.entity';
 import { FindOptionsWhere } from 'typeorm';
 import { CreateTestcaseItemDto } from '../dto/input/create-test-case-item.dto';
 import { FindFilteredTestcaseItemQueryDto } from '../dto/input/find-filtered-test-case-item.dto';
@@ -83,7 +84,22 @@ export class TestcaseItemService {
 
   //------------------------------
   async getFilteredTestcaseItems(query: FindFilteredTestcaseItemQueryDto) {
-    return await this.testcaseItemRepository.getFilteredTestcaseItems(query);
+    return await this.testcaseItemRepository.getFilteredTestcaseItems(
+      query,
+      false,
+    );
+  }
+
+  //------------------------------
+  async getFilteredRequestUserScope(
+    query: FindFilteredTestcaseItemQueryDto,
+    memberRoles: Role[],
+  ) {
+    return await this.testcaseItemRepository.getFilteredTestcaseItems(
+      query,
+      true,
+      memberRoles,
+    );
   }
 
   //------------------------------

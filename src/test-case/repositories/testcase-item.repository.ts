@@ -1,10 +1,17 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { I18nService } from 'nestjs-i18n';
+import { ActionRepository } from 'src/action/repositories/action.repository';
+import { AssessmentRequestRepository } from 'src/assessment/repositories/assessment-request.repository';
 import { AssetType } from 'src/asset/entities/asset-type.entity';
-import { AssetTypeRepository } from 'src/asset/repositories/asset-type.repository';
+import { ActionEnum } from 'src/common/enums/action.enum';
 import { AbstractRepository } from 'src/database/abstract.repository';
 import { Environment } from 'src/environment/entities/environment.entity';
+import { Role } from 'src/role/entities/role.entity';
 import { DataSource, FindOptionsWhere, In, Repository } from 'typeorm';
 import { CreateTestcaseItemDto } from '../dto/input/create-test-case-item.dto';
 import { FindFilteredTestcaseItemQueryDto } from '../dto/input/find-filtered-test-case-item.dto';
@@ -17,7 +24,8 @@ export class TestcaseItemRepository extends AbstractRepository<TestcaseItem> {
   constructor(
     @InjectRepository(TestcaseItem)
     private testcaseItemRepository: Repository<TestcaseItem>,
-    private readonly assetTypeRepository: AssetTypeRepository,
+    private readonly actionRepository: ActionRepository,
+    private readonly assessmentRequestRepository: AssessmentRequestRepository,
     private readonly dataSource: DataSource,
     private i18nService: I18nService,
   ) {
@@ -64,6 +72,8 @@ export class TestcaseItemRepository extends AbstractRepository<TestcaseItem> {
   //------------------------------
   async getFilteredTestcaseItems(
     query: FindFilteredTestcaseItemQueryDto,
+    isRequest: boolean,
+    memberRoles?: Role[],
   ): Promise<[TestcaseItem[], number]> {
     const qb = this.testcaseItemRepository
       .createQueryBuilder('testcaseItem')
@@ -86,17 +96,65 @@ export class TestcaseItemRepository extends AbstractRepository<TestcaseItem> {
         testcaseGroupId: query.testcaseGroupId,
       });
     }
-
     if (query.assetTypeId) {
       qb.andWhere('assetTestCase.assetTypeId = :assetTypeId', {
         assetTypeId: query.assetTypeId,
       });
     }
 
-    if (query.assessmentTypeIds && query.assessmentTypeIds.length > 0) {
-      qb.andWhere('assessmentType.id IN (:...assessmentTypeIds)', {
-        assessmentTypeIds: query.assessmentTypeIds,
+    let mustConsiderIteration = false;
+
+    if (isRequest && memberRoles && query.requestId) {
+      const actions = await this.actionRepository.findAll({
+        select: { id: true, name: true },
+        where: {
+          roles: { id: In(memberRoles.map((role) => role.id)) },
+        },
       });
+
+      const canAccessAll = actions.some(
+        (memberRole) => memberRole.name === ActionEnum.StatusReportedFinalize,
+      );
+      if (!canAccessAll) {
+        mustConsiderIteration = true;
+
+        console.log('in here');
+
+        const assets = await this.assessmentRequestRepository.findOne({
+          where: { id: query.requestId },
+          relations: ['assessmentLayers'],
+        });
+
+        if (!assets?.assessmentLayers) {
+          throw new NotFoundException(
+            this.i18nService.t('messages.ERROR_NOT_FOUND_PROPERTY', {
+              args: { property: 'asset' },
+            }),
+          );
+        }
+
+        const assessmentTypeIds: string[] = [];
+        for (let i = 0; i < assets.assessmentLayers.length; i++) {
+          const layer = assets.assessmentLayers[i];
+
+          if (layer.iterationCount > 0) {
+            assessmentTypeIds.push(layer.assessmentTypeId);
+          }
+        }
+        if (assessmentTypeIds.length === 0) {
+          return [[], 0];
+        }
+        qb.andWhere('assessmentType.id IN (:...assessmentTypeIds)', {
+          assessmentTypeIds: assessmentTypeIds,
+        });
+      }
+    }
+    if (!mustConsiderIteration) {
+      if (query.assessmentTypeIds && query.assessmentTypeIds.length > 0) {
+        qb.andWhere('assessmentType.id IN (:...assessmentTypeIds)', {
+          assessmentTypeIds: query.assessmentTypeIds,
+        });
+      }
     }
 
     if (query.take) {

@@ -9,12 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Action } from 'src/common/decorators/action.decorator';
 import { Process } from 'src/common/decorators/process.decorator';
 import { ActionEnum } from 'src/common/enums/action.enum';
@@ -39,7 +34,6 @@ export class FilterController {
   @ApiCreatedResponse({
     type: GetFilterDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiTags('Admin / Asset-Filter')
   @Post('admin/filter')
@@ -57,7 +51,6 @@ export class FilterController {
   @ApiCreatedResponse({
     type: GetFilterDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiTags('Admin / Asset-Filter')
   @Get('admin/filter')
@@ -78,7 +71,6 @@ export class FilterController {
   @ApiCreatedResponse({
     type: GetFilterDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiTags('Admin / Asset-Filter')
   @Get('admin/filter/:id')
@@ -96,7 +88,6 @@ export class FilterController {
   @ApiCreatedResponse({
     type: GetFilterDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiTags('Admin / Asset-Filter')
   @Patch('admin/filter/:id')
@@ -114,7 +105,6 @@ export class FilterController {
   @ApiCreatedResponse({
     type: GetFilterDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiTags('Admin / Asset-Filter')
   @Delete('admin/filter/:id')
@@ -127,7 +117,6 @@ export class FilterController {
   @ApiCreatedResponse({
     type: GetFilterDto,
   })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Read)

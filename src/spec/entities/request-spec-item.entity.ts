@@ -48,11 +48,9 @@ export class RequestSpecItem extends AbstractEntity<RequestSpecItem> {
   )
   requestSpecContents?: RequestSpecContent[];
 
-  @Column({ nullable: true })
-  environmentId?: string;
-
-  @ManyToOne(() => Environment)
-  environment?: Environment;
+  @ManyToMany(() => Environment, (environment) => environment.requestSpecItems)
+  @JoinTable()
+  environments?: Environment[];
 
   @ManyToMany(
     () => AssessmentType,

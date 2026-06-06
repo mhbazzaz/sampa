@@ -7,21 +7,22 @@ import {
   Patch,
   Post,
   Query,
+  SetMetadata,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { CurrentMemberRoles } from 'src/common/decorators/current-member-roles.decorators';
+import { ActionEnum } from 'src/common/enums/action.enum';
+import { AuthorizationMetaDataEnum } from 'src/common/enums/authorization-meta-data.enum';
+import { ProcessEnum } from 'src/common/enums/process.enum';
 import { AdminGuard } from 'src/common/guards/admin.guard';
 import { AuthorizationGuard } from 'src/common/guards/authorization.guard';
 import { UserGuard } from 'src/common/guards/user.guard';
 import { responseGenerator } from 'src/common/helpers/response-generator';
 import { ModifyPatchRequestBodyInterceptors } from 'src/common/interceptors/modify-patch-request-body.interceptor';
 import { PaginationDto } from 'src/common/pagination-dto/pagination.dto';
+import { Role } from 'src/role/entities/role.entity';
 import { CreateTestcaseItemDto } from '../dto/input/create-test-case-item.dto';
 import { FindFilteredTestcaseItemQueryDto } from '../dto/input/find-filtered-test-case-item.dto';
 import { UpdateTestcaseItemDto } from '../dto/input/update-test-case-item.dto';
@@ -38,7 +39,6 @@ export class TestcaseItemController {
   @ApiCreatedResponse({
     type: GetTestcaseDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Post('admin/test-case/item')
   async createAdminScope(
@@ -58,7 +58,6 @@ export class TestcaseItemController {
   @ApiCreatedResponse({
     type: GetTestcaseDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Post('test-case/item')
@@ -79,7 +78,6 @@ export class TestcaseItemController {
   @ApiCreatedResponse({
     type: GetTestcaseDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Get('admin/test-case/item')
   async findAll(@Query() query: PaginationDto) {
@@ -100,7 +98,6 @@ export class TestcaseItemController {
   @ApiCreatedResponse({
     type: [GetTestcaseDto],
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Get('admin/test-case/item/filtered')
   async getFiltered(@Query() query: FindFilteredTestcaseItemQueryDto) {
@@ -119,7 +116,6 @@ export class TestcaseItemController {
   @ApiCreatedResponse({
     type: GetTestcaseDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Get('admin/test-case/item/:id')
   async findOne(@Param('id') id: string) {
@@ -133,20 +129,54 @@ export class TestcaseItemController {
 
   //------------------------------
   @ApiTags('Test-Case-Item')
-  @ApiOperation({
-    summary:
-      'Get Test Case Items With Filter On TestCaseGroupId and EnvironmentId and TestCaseId and AssessmentTypeId and AssetTypeId',
-  })
   @ApiCreatedResponse({
     type: [GetTestcaseDto],
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
+  @SetMetadata(AuthorizationMetaDataEnum.Action, [
+    ActionEnum.PendingLayerTestcasesSubmit,
+    ActionEnum.LayerAssessmentCompletedAccept,
+    ActionEnum.LayerReEvaluationRequestedAccept,
+    ActionEnum.LayerAssessmentReviewAccept,
+    ActionEnum.RemediateLayerVulnerabilitiesFinalize,
+    ActionEnum.ReviewLayerRemediatesApprove,
+    ActionEnum.LayerReportIssuedRefer,
+    ActionEnum.LayerAssessmentFulfilledReinstate,
+  ])
+  @SetMetadata(AuthorizationMetaDataEnum.Process, ProcessEnum.AssessmentLayer)
   @UseGuards(UserGuard)
-  @Get('test-case/item/filtered')
+  @Get('test-case/layer-item/filtered')
   async getFilteredUserScope(@Query() query: FindFilteredTestcaseItemQueryDto) {
     const result =
       await this.testcaseItemService.getFilteredTestcaseItems(query);
+    return responseGenerator({
+      statusCode: 200,
+      message: 'successful',
+      data: { data: result[0], count: result[1] },
+    });
+  }
+
+  //------------------------------
+  @ApiTags('Test-Case-Item')
+  @ApiCreatedResponse({
+    type: [GetTestcaseDto],
+  })
+  @UseGuards(AuthorizationGuard)
+  @SetMetadata(AuthorizationMetaDataEnum.Action, [
+    ActionEnum.ReadTestCaseAfterFirstIteration,
+    ActionEnum.StatusReportedFinalize,
+  ])
+  @SetMetadata(AuthorizationMetaDataEnum.Process, ProcessEnum.AssessmentRequest)
+  @UseGuards(UserGuard)
+  @Get('test-case/request-item/filtered')
+  async getFilteredRequestUserScope(
+    @Query() query: FindFilteredTestcaseItemQueryDto,
+    @CurrentMemberRoles() memberRoles: Role[],
+  ) {
+    const result = await this.testcaseItemService.getFilteredRequestUserScope(
+      query,
+      memberRoles,
+    );
     return responseGenerator({
       statusCode: 200,
       message: 'successful',
@@ -160,7 +190,6 @@ export class TestcaseItemController {
   @ApiCreatedResponse({
     type: GetTestcaseDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Get('test-case/item/:id')
@@ -179,7 +208,6 @@ export class TestcaseItemController {
   @ApiCreatedResponse({
     type: GetTestcaseDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @UseInterceptors(ModifyPatchRequestBodyInterceptors)
   @Patch('admin/test-case/item/:id')
@@ -201,7 +229,6 @@ export class TestcaseItemController {
   @ApiCreatedResponse({
     type: GetTestcaseDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @UseInterceptors(ModifyPatchRequestBodyInterceptors)
@@ -226,7 +253,6 @@ export class TestcaseItemController {
   @ApiCreatedResponse({
     type: GetTestcaseDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Delete('admin/test-case/item/:id')
   remove(@Param('id') id: string) {

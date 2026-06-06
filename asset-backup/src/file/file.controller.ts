@@ -14,7 +14,6 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
-  ApiBearerAuth,
   ApiBody,
   ApiConsumes,
   ApiOperation,
@@ -66,7 +65,6 @@ export class FileController {
     description: 'File has been saved successfully!',
     type: FileResponseDto,
   })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Save)
@@ -101,7 +99,6 @@ export class FileController {
   //------------------------------
   @ApiTags('Files')
   @ApiOperation({ summary: 'Apply Assets In Excel File For Assets Creation' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Action(ActionEnum.Save)
@@ -178,7 +175,6 @@ export class FileController {
       },
     },
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @ApiTags('Admin / Files')
   @Post('admin/files/upload-excel-template')

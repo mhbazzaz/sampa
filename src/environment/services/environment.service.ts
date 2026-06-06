@@ -58,7 +58,7 @@ export class EnvironmentService {
       relations.push(this.i18nService.t('objects.test case item'));
     }
     const requestSpecItem = await this.requestSpecItemRepository.findOne({
-      where: { environmentId: id },
+      where: { environments: { id } },
     });
     if (requestSpecItem) {
       relations.push(this.i18nService.t('objects.request spec item'));

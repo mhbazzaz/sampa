@@ -7,6 +7,7 @@ import { I18nService } from 'nestjs-i18n';
 import { AssessmentTypeRepository } from 'src/assessment/repositories/assessment-type.repository';
 import { AssetTypeRepository } from 'src/asset/repositories/asset-type.repository';
 import { ValidationService } from 'src/common/validations/schema-validation.service';
+import { Environment } from 'src/environment/entities/environment.entity';
 import { EnvironmentRepository } from 'src/environment/repositories/environment.repository';
 import { FindOneOptions, FindOptionsWhere, In } from 'typeorm';
 import { CreateSpecItemDto } from '../dto/input/create-spec-item.dto';
@@ -44,7 +45,7 @@ export class RequestSpecItemService {
       relations: {
         assessmentType: { assessmentLayers: true },
         assetType: true,
-        environment: true,
+        environments: true,
       },
     });
   }
@@ -55,7 +56,7 @@ export class RequestSpecItemService {
       relations: {
         assessmentType: { assessmentLayers: true },
         assetType: true,
-        environment: true,
+        environments: true,
       },
     });
   }
@@ -67,6 +68,19 @@ export class RequestSpecItemService {
   ) {
     const updatePayload: Partial<RequestSpecItem> = {};
 
+    const currentSpec = await this.requestSpecItemRepository.findOne({
+      where: data,
+    });
+
+    if (!currentSpec) {
+      throw new BadRequestException(
+        this.i18nService.t('messages.ERROR_PROPERTY_ID_INVALID', {
+          args: { value: data.id, property: 'SpecId' },
+        }),
+      );
+    }
+
+    const newEnvironments: string[] = [];
     for (const [key, value] of Object.entries(updateRequestSpecItem)) {
       const typedKey = key as keyof UpdateSpecItemDto;
 
@@ -107,23 +121,16 @@ export class RequestSpecItemService {
             updatePayload[typedKey] = assetType.id;
             break;
 
-          case 'environmentId':
-            const environment = await this.environmentRepository.findOne({
-              where: { id: value as string },
-            });
-
-            if (!environment) {
-              throw new BadRequestException(
-                this.i18nService.t('messages.ERROR_PROPERTY_ID_INVALID', {
-                  args: { value: value, property: 'Environment' },
-                }),
-              );
-            }
-            updatePayload[typedKey] = environment.id;
+          case 'environmentIds':
+            updatePayload['environments'] = (value as string[]).map(
+              (v) => new Environment({ id: v }),
+            );
             break;
 
           default:
-            updatePayload[typedKey] = value;
+            if (typedKey !== 'environmentId') {
+              updatePayload[typedKey] = value;
+            }
             break;
         }
       }
@@ -160,7 +167,9 @@ export class RequestSpecItemService {
             query.assessmentTypeIds && query.assessmentTypeIds.length > 0
               ? { id: In(query.assessmentTypeIds) }
               : undefined,
-          environmentId: query.environmentId ? query.environmentId : undefined,
+          environments: query.environmentId
+            ? { id: query.environmentId }
+            : undefined,
           assetTypeId: query.assetTypeId ? query.assetTypeId : undefined,
         },
         relations: { assessmentType: { assessmentLayers: true } },

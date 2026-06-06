@@ -7,12 +7,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentMember } from 'src/common/decorators/current-member.decorators';
 import { AuthorizationGuard } from 'src/common/guards/authorization.guard';
 import { UserGuard } from 'src/common/guards/user.guard';
@@ -24,7 +19,6 @@ import { GetTestcaseRemediateDto } from '../dto/response/get-remediate.dto';
 import { TestcaseRemediateService } from '../services/test-case-remediate.service';
 
 @ApiTags('Test-Case-Remediate')
-@ApiBearerAuth('idp-token')
 @UseGuards(AuthorizationGuard)
 @UseGuards(UserGuard)
 @Controller('test-case/remediate')

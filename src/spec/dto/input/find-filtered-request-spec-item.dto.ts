@@ -4,16 +4,14 @@ import { IsArray, IsOptional, IsString, IsUUID } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class FindFilteredRequestSpecItemQueryDto {
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ type: () => [String] })
+  @IsArray({ message: i18nValidationMessage('validation.IsArray') })
   @IsString({
-    message: i18nValidationMessage('validation.IsString'),
+    each: true,
+    message: i18nValidationMessage('validation.IsStringEach'),
   })
-  @IsUUID('all', {
-    message: i18nValidationMessage('validation.IsUUID'),
-  })
-  @Transform(({ value }) => value || undefined)
   @IsOptional()
-  environmentId?: string;
+  environmentIds?: string;
 
   @ApiPropertyOptional()
   @IsString({

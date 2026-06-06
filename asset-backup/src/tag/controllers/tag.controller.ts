@@ -10,12 +10,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Action } from 'src/common/decorators/action.decorator';
 import { Process } from 'src/common/decorators/process.decorator';
 import { ActionEnum } from 'src/common/enums/action.enum';
@@ -41,7 +36,6 @@ export class TagController {
   @ApiCreatedResponse({
     type: GetTagDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Post('admin/tag')
   async create(@Body() data: CreateTagDto): Promise<GetTagDto> {
@@ -59,7 +53,6 @@ export class TagController {
   @ApiCreatedResponse({
     type: GetTagDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Get('admin/tag')
   async findAll(@Query() query: GetAssetsQueryParamsDto) {
@@ -81,7 +74,6 @@ export class TagController {
   @ApiCreatedResponse({
     type: GetTagDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Get('admin/tag/:id')
   async findOne(@Param('id') id: string): Promise<GetTagDto> {
@@ -101,7 +93,6 @@ export class TagController {
   @ApiCreatedResponse({
     type: GetTagDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @UseInterceptors(ModifyPatchRequestBodyInterceptors)
   @Patch('admin/tag/:id')
@@ -120,7 +111,6 @@ export class TagController {
   @ApiCreatedResponse({
     type: GetTagDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Delete('admin/tag/:id')
   remove(@Param('id') id: string) {
@@ -133,7 +123,6 @@ export class TagController {
   @ApiCreatedResponse({
     type: GetTagDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Action(ActionEnum.Read)
   @Process(ProcessEnum.AssetManagement)
@@ -158,7 +147,6 @@ export class TagController {
   @ApiCreatedResponse({
     type: GetTagDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Action(ActionEnum.Read)
   @Process(ProcessEnum.AssetManagement)

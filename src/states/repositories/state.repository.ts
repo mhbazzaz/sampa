@@ -18,13 +18,22 @@ export class StatesRepository extends AbstractRepository<State> {
 
   //------------------------------
   async findAllWithFilter(query: FindAllStatesQueryDto) {
-    const qb = this.statesRepository.createQueryBuilder('state');
+    const qb = this.statesRepository
+      .createQueryBuilder('state')
+      .leftJoinAndSelect('state.process', 'process');
 
     if (query.processId) {
       qb.where('state.processId = :processId', {
         processId: query.processId,
       });
     }
+
+    if (query.processName) {
+      qb.where('process.name = :name', {
+        name: query.processName,
+      });
+    }
+
     qb.orderBy('state.createdAt', 'ASC');
 
     return qb.getManyAndCount();

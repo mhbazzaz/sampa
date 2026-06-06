@@ -25,9 +25,9 @@ export class Environment extends AbstractEntity<Environment> {
   )
   testcaseItems?: TestcaseItem[];
 
-  @OneToMany(
+  @ManyToMany(
     () => RequestSpecItem,
-    (requestSpecItem) => requestSpecItem.environment,
+    (requestSpecItem) => requestSpecItem.environments,
   )
   requestSpecItems?: RequestSpecItem[];
 }

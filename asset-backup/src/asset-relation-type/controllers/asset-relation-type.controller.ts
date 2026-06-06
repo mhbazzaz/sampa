@@ -10,7 +10,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AdminGuard } from 'src/common/guards/admin.guard';
 import { responseGenerator } from 'src/common/helpers/response-generator';
 import { ModifyPatchRequestBodyInterceptors } from 'src/common/interceptors/modify-patch-request-body.interceptor';
@@ -20,7 +20,6 @@ import { UpdateAssetRelationTypeDto } from '../dto/input/update-asset-relation-t
 import { AssetRelationTypeService } from '../services/asset-relation-type.service';
 
 @ApiTags('Admin / Asset-Relation-Type')
-@ApiBearerAuth('adminAccessToken')
 @UseGuards(AdminGuard)
 @Controller('admin/asset-relation-type')
 export class AssetRelationTypeController {

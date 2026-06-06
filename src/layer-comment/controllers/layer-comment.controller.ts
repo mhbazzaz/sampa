@@ -7,7 +7,7 @@ import {
   SetMetadata,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ActionEnum } from 'src/common/enums/action.enum';
 import { AuthorizationMetaDataEnum } from 'src/common/enums/authorization-meta-data.enum';
 import { ProcessEnum } from 'src/common/enums/process.enum';
@@ -28,7 +28,6 @@ export class LayerCommentController {
   @ApiOperation({
     summary: `Create Layer Comment, ${ActionEnum.GetLayerComment} | ${ProcessEnum.AssessmentLayer}`,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, ActionEnum.GetLayerComment)
@@ -51,7 +50,6 @@ export class LayerCommentController {
   @ApiOperation({
     summary: `Delete Layer Comment, ${ActionEnum.DeleteLayerComment} | ${ProcessEnum.AssessmentLayer}`,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, ActionEnum.DeleteLayerComment)

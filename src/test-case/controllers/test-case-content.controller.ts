@@ -29,7 +29,6 @@ import { GetTestcaseDto } from '../dto/response/get-test-case.dto';
 import { TestcaseContentService } from '../services/test-case-content.service';
 import { Member } from 'src/member/entities/member.entity';
 
-@ApiBearerAuth('idp-token')
 @Controller('')
 export class TestcaseContentController {
   constructor(
@@ -42,7 +41,6 @@ export class TestcaseContentController {
   @ApiCreatedResponse({
     type: GetTestcaseDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Post('admin/test-case/content')
   async createAdminScope(@Body() data: CreateTestcaseContentDto) {
@@ -60,7 +58,6 @@ export class TestcaseContentController {
   @ApiCreatedResponse({
     type: GetTestcaseDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Post('test-case/content')
@@ -79,7 +76,6 @@ export class TestcaseContentController {
   @ApiCreatedResponse({
     type: [GetTestcaseDto],
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Get('admin/test-case/content')
   async findAllAdminScope(@Query() query: PaginationDto) {
@@ -97,7 +93,6 @@ export class TestcaseContentController {
   @ApiCreatedResponse({
     type: [GetTestcaseDto],
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Get('test-case/content')
@@ -116,7 +111,6 @@ export class TestcaseContentController {
   @ApiCreatedResponse({
     type: GetTestcaseDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Get('admin/test-case/content/:id')
   async findOneAdminScope(@Param('id') id: string) {
@@ -137,7 +131,6 @@ export class TestcaseContentController {
   @ApiCreatedResponse({
     type: GetTestcaseDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Get('test-case/content/:id')
@@ -159,7 +152,6 @@ export class TestcaseContentController {
   @ApiCreatedResponse({
     type: GetTestcaseDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @UseInterceptors(ModifyPatchRequestBodyInterceptors)
   @Patch('admin/test-case/content/:id')
@@ -168,7 +160,11 @@ export class TestcaseContentController {
     @Body() data: UpdateTestcaseContentDto,
     @CurrentMember() member: Member,
   ) {
-    const result = await this.testcaseContentService.update({ id }, data, member.id);
+    const result = await this.testcaseContentService.update(
+      { id },
+      data,
+      member.id,
+    );
     return responseGenerator({
       statusCode: 200,
       message: 'successful',
@@ -182,7 +178,6 @@ export class TestcaseContentController {
   @ApiCreatedResponse({
     type: GetTestcaseDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @UseInterceptors(ModifyPatchRequestBodyInterceptors)
@@ -192,7 +187,11 @@ export class TestcaseContentController {
     @Body() data: UpdateTestcaseContentDto,
     @CurrentMember() member: Member,
   ) {
-    const result = await this.testcaseContentService.update({ id }, data, member.id);
+    const result = await this.testcaseContentService.update(
+      { id },
+      data,
+      member.id,
+    );
     return responseGenerator({
       statusCode: 200,
       message: 'successful',
@@ -206,7 +205,6 @@ export class TestcaseContentController {
   @ApiCreatedResponse({
     type: GetTestcaseDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Delete('admin/test-case/content/:id')
   async removeAdminScope(@Param('id') id: string) {
@@ -219,7 +217,6 @@ export class TestcaseContentController {
   @ApiCreatedResponse({
     type: GetTestcaseDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @Delete('test-case/content/:id')

@@ -12,9 +12,7 @@ import { EnvironmentService } from '../services/environment.service';
 
 @ValidatorConstraint({ async: true })
 @Injectable()
-export class CheckEnvironmentExistValidator
-  implements ValidatorConstraintInterface
-{
+export class CheckEnvironmentExistValidator implements ValidatorConstraintInterface {
   constructor(
     private readonly environmentsService: EnvironmentService,
     private readonly i18nService: I18nService,

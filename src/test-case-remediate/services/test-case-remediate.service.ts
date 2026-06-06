@@ -89,7 +89,7 @@ export class TestcaseRemediateService {
         }),
       },
       relations: { testcaseContent: true, member: true },
-      order: { createdAt: 'ASC' },
+      order: { createdAt: 'DESC' },
     });
   }
 

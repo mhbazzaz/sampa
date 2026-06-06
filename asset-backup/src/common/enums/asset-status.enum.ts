@@ -5,4 +5,7 @@ export enum AssetStatusEnum {
   OutOfService = 'outOfService',
   Disabled = 'disabled',
   Disposed = 'disposed',
+  Pending = 'pending',
+  Approved = 'approved',
+  Declined = 'declined',
 }

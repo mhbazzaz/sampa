@@ -10,7 +10,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AdminGuard } from 'src/common/guards/admin.guard';
 import { UserGuard } from 'src/common/guards/user.guard';
 import { responseGenerator } from 'src/common/helpers/response-generator';
@@ -28,7 +28,6 @@ export class LocationTypeController {
   //------------------------------
   @ApiTags('Admin / LocationType')
   @ApiOperation({ summary: 'Create LocationType' })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Post('admin/location-type')
   async create(@Body() data: CreateLocationTypeDto) {
@@ -43,7 +42,6 @@ export class LocationTypeController {
   //------------------------------
   @ApiTags('Admin / LocationType')
   @ApiOperation({ summary: 'Get All LocationType With Filter' })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Get('admin/location-type')
   async findAllAdminScope(@Query() query: FindAllLocationTypeQueryDto) {
@@ -58,7 +56,6 @@ export class LocationTypeController {
   //------------------------------
   @ApiTags('Admin / LocationType')
   @ApiOperation({ summary: 'Get One LocationType' })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Get('admin/location-type/:id')
   async findOneLocationType(@Param('id') id: string) {
@@ -75,7 +72,6 @@ export class LocationTypeController {
   //------------------------------
   @ApiTags('Admin / LocationType')
   @ApiOperation({ summary: 'Update LocationType' })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @UseInterceptors(ModifyPatchRequestBodyInterceptors)
   @Patch('admin/location-type/:id')
@@ -86,7 +82,6 @@ export class LocationTypeController {
   //----------------------------------
   @ApiTags('Admin / LocationType')
   @ApiOperation({ summary: 'Remove LocationType by ID' })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Delete('admin/location-type/:id')
   async remove(@Param('id') id: string) {
@@ -96,7 +91,6 @@ export class LocationTypeController {
   //------------------------------
   @ApiTags('LocationType')
   @ApiOperation({ summary: 'Get All LocationType With Filter' })
-  @ApiBearerAuth('accessToken')
   @UseGuards(UserGuard)
   @Get('location-type')
   async findAllUserScope(@Query() query: FindAllLocationTypeUserQueryDto) {

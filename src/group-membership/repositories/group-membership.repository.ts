@@ -17,7 +17,7 @@ export class GroupMembershipRepository extends AbstractRepository<GroupMembershi
 
   async getUserTeamMembers(memberId: string) {
     const groups = await this.findAll({
-      where: { userId: memberId },
+      where: { userId: memberId, isMember: true },
       select: { groupId: true },
     });
     const members = await this.findAll({

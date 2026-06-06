@@ -9,7 +9,7 @@ import {
   SetMetadata,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentMember } from 'src/common/decorators/current-member.decorators';
 import { ActionEnum } from 'src/common/enums/action.enum';
 import { AuthorizationMetaDataEnum } from 'src/common/enums/authorization-meta-data.enum';
@@ -33,7 +33,6 @@ export class SpecCommentController {
   @ApiOperation({
     summary: `Create Spec Comment, ${ActionEnum.CreateSpecComment} | ${ProcessEnum.AssessmentLayer}`,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, ActionEnum.CreateSpecComment)
@@ -55,7 +54,6 @@ export class SpecCommentController {
   @ApiOperation({
     summary: `Create Spec Comment, ${ActionEnum.GetSpecComment} | ${ProcessEnum.AssessmentLayer}`,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, ActionEnum.GetSpecComment)
@@ -78,7 +76,6 @@ export class SpecCommentController {
   @ApiOperation({
     summary: `Delete Spec Comment, ${ActionEnum.DeleteSpecComment} | ${ProcessEnum.AssessmentLayer}`,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, ActionEnum.DeleteSpecComment)

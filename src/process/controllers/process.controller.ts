@@ -12,7 +12,6 @@ export class ProcessController {
   // @ApiCreatedResponse({
   //   type: GetProcessDto,
   // })
-  // @ApiBearerAuth('idp-token')
   // @UseGuards(UserGuard)
   // @Post('')
   // async create(@Body() data: CreateProcessDto): Promise<GetProcessDto> {
@@ -29,7 +28,6 @@ export class ProcessController {
   // @ApiCreatedResponse({
   //   type: GetProcessDto,
   // })
-  // @ApiBearerAuth('idp-token')
   // @UseGuards(UserGuard)
   // @Get('')
   // async findAll(@Query() query: PaginationDto) {
@@ -49,7 +47,6 @@ export class ProcessController {
   // @ApiCreatedResponse({
   //   type: GetProcessDto,
   // })
-  // @ApiBearerAuth('idp-token')
   // @UseGuards(UserGuard)
   // @Get(':id')
   // async findOne(@Param('id') id: string): Promise<GetProcessDto> {
@@ -68,7 +65,6 @@ export class ProcessController {
   // @ApiCreatedResponse({
   //   type: GetProcessDto,
   // })
-  // @ApiBearerAuth('idp-token')
   // @UseGuards(UserGuard)
   // @Patch(':id')
   // async update(@Param('id') id: string, @Body() data: UpdateProcessDto) {
@@ -85,7 +81,6 @@ export class ProcessController {
   // @ApiCreatedResponse({
   //   type: GetProcessDto,
   // })
-  // @ApiBearerAuth('idp-token')
   // @UseGuards(UserGuard)
   // @Delete(':id')
   // remove(@Param('id') id: string) {

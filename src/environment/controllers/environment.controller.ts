@@ -10,12 +10,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AdminGuard } from 'src/common/guards/admin.guard';
 import { UserGuard } from 'src/common/guards/user.guard';
 import { responseGenerator } from 'src/common/helpers/response-generator';
@@ -36,7 +31,6 @@ export class EnvironmentController {
   @ApiCreatedResponse({
     type: GetEnvironmentDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Post('admin/environment')
   async create(@Body() data: CreateEnvironmentDto): Promise<GetEnvironmentDto> {
@@ -54,7 +48,6 @@ export class EnvironmentController {
   @ApiCreatedResponse({
     type: GetEnvironmentDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Get('admin/environment')
   async findAll(@Query() query: PaginationDto) {
@@ -75,7 +68,6 @@ export class EnvironmentController {
   @ApiCreatedResponse({
     type: GetEnvironmentDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Get('admin/environment/:id')
   async findOne(@Param('id') id: string): Promise<GetEnvironmentDto> {
@@ -93,7 +85,6 @@ export class EnvironmentController {
   @ApiCreatedResponse({
     type: GetEnvironmentDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseInterceptors(ModifyPatchRequestBodyInterceptors)
   @UseGuards(AdminGuard)
   @Patch('admin/environment/:id')
@@ -112,7 +103,6 @@ export class EnvironmentController {
   @ApiCreatedResponse({
     type: GetEnvironmentDto,
   })
-  @ApiBearerAuth('adminAccessToken')
   @UseGuards(AdminGuard)
   @Delete('admin/environment/:id')
   remove(@Param('id') id: string) {
@@ -125,7 +115,6 @@ export class EnvironmentController {
   @ApiCreatedResponse({
     type: GetEnvironmentDto,
   })
-  @ApiBearerAuth('idp-token')
   @UseGuards(UserGuard)
   @Get('environment')
   async findAllUserScope(@Query() query: PaginationDto) {
