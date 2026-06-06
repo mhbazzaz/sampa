@@ -233,6 +233,7 @@ export class AssetTypeService {
       assetFilterIds,
       assetRelationIds,
       locationTypeIds,
+      classification,
     } = updateAssetType;
 
     const existingAssetType = await this.assetTypeRepository.findOne({
@@ -305,7 +306,7 @@ export class AssetTypeService {
         },
       );
 
-      const versionUpdateData: Partial<AssetTypeVersion> = {};
+      const versionUpdateData: Partial<AssetTypeVersion> = { classification };
 
       if (locationChanged) versionUpdateData.hasLocation = hasLocation!;
       if (filterChanged && assetFilterIds) {
@@ -365,6 +366,7 @@ export class AssetTypeService {
       hasLocation: hasLocation ?? latestVersion.hasLocation,
       version: latestVersion.version + 1,
       archived: false,
+      classification,
     });
 
     if (assetFilterIds) {

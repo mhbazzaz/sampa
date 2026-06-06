@@ -1,3 +1,3 @@
 export enum AssetTypeClassificationEnum {
-  LogSource = 'LogSource',
+  LogSource = 'Log Source Watcher',
 }

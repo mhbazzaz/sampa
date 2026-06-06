@@ -4,6 +4,7 @@ import {
   Allow,
   IsArray,
   IsBoolean,
+  IsEnum,
   IsObject,
   IsOptional,
   IsString,
@@ -12,6 +13,7 @@ import {
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 import { Asset } from 'src/asset/entities/asset.entity';
+import { AssetTypeClassificationEnum } from 'src/common/enums/asset-type-classification.enum';
 import { AssetRelationIdsDto } from './create-asset-type.dto';
 
 export class UpdateAssetTypeDto {
@@ -81,6 +83,11 @@ export class UpdateAssetTypeDto {
   @Type(() => AssetRelationIdsDto)
   @IsOptional()
   assetRelationIds?: AssetRelationIdsDto[];
+
+  @ApiProperty()
+  @IsEnum(AssetTypeClassificationEnum)
+  @IsOptional()
+  classification?: AssetTypeClassificationEnum;
 
   @Allow()
   id?: string;
