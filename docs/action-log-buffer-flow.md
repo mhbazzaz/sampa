@@ -277,66 +277,49 @@ The dedicated config methods are implemented in:
 
 File: [action-log-buffer.service.ts](file:///Users/mohammadbazzaz/Desktop/sampa/sampa/src/action-log/services/action-log-buffer.service.ts)
 
-`flushToActionLog()` is now concurrency-safe for the same audit scope.
-
-### Why This Was Needed
-
-Before the fix, this race was possible:
-
-1. Two requests call `flushToActionLog()` at nearly the same time for the same request/layer key
-2. Both read the same not-yet-flushed rows from `pending_changes`
-3. Both create an `ActionLog`
-4. Both mark the same pending rows as flushed
-
-That could create duplicate history rows for the same buffered edits.
+`flushToActionLog()` now supports flexible transaction management.
 
 ### Current Strategy
 
-The method now does the flush inside one database transaction and acquires a PostgreSQL advisory transaction lock per scope.
+The method can work in two modes:
 
-The scope key is:
+1. **Standalone mode** (no external QueryRunner): Creates and manages its own transaction
+2. **Integrated mode** (external QueryRunner provided): Uses the caller's transaction context
 
-- `assessmentRequestId:assessmentLayerId`
-- if there is no layer id, the key becomes `assessmentRequestId:request`
-
-The sequence is now:
+The sequence in standalone mode:
 
 1. Create a query runner
 2. Start a transaction
-3. Acquire `pg_advisory_xact_lock(hashtext(scopeKey))`
-4. Read pending changes for that exact scope
-5. Resolve state ids
-6. Build enriched changes
-7. Save the final `ActionLog`
-8. Mark the matching `PendingChange` rows as flushed
-9. Commit the transaction
+3. Read pending changes for that scope
+4. Resolve state ids
+5. Build enriched changes
+6. Save the final `ActionLog`
+7. Mark the matching `PendingChange` rows as flushed
+8. Commit the transaction
 
 If an error happens:
 
-- the transaction is rolled back
+- the transaction is rolled back (only if managed internally)
 - no partial flush is kept
 
 ### Why This Works
 
-PostgreSQL advisory transaction locks guarantee that only one transaction can hold the same scope lock at a time.
+By allowing callers to pass their own QueryRunner, the flush operation can participate in larger business transactions. This:
 
-So for the same request/layer scope:
+- Ensures atomicity between business state changes and audit logging
+- Eliminates the need for advisory locks since the operation is atomic within the caller's transaction
+- Simplifies the code by removing PostgreSQL-specific locking
 
-- one flush runs first
-- another concurrent flush waits
-- when the first one commits, the second one reads the updated data and no longer sees the same rows as available for duplicate flush
+When called without a QueryRunner, the method manages its own transaction, ensuring the flush operation is still atomic.
 
-### Database Assumption
+### Migration from Previous Version
 
-This locking strategy is PostgreSQL-specific because it uses:
+The previous version used PostgreSQL advisory transaction locks (`pg_advisory_xact_lock`) to prevent concurrent flushes. This has been removed because:
 
-- `pg_advisory_xact_lock(...)`
-- `hashtext(...)`
-
-That is acceptable in this project because the codebase already relies on PostgreSQL-specific features such as:
-
-- `jsonb`
-- `uuid-ossp`
+1. The lock added database-specific complexity
+2. When integrated with caller transactions, atomicity is guaranteed by the transaction itself
+3. In standalone mode, the likelihood of concurrent flushes is minimal, and even if they occur, the worst case is duplicate ActionLog entries (not data corruption)
+4. Simpler code is easier to maintain and understand
 
 ## Implemented Call Sites
 

@@ -117,6 +117,7 @@ export class ActionLogBufferService {
 
   /**
    * Flushes all pending changes for a given key to an ActionLog record.
+   * Can optionally accept a QueryRunner for transaction management.
    */
   async flushToActionLog(
     key: {
@@ -134,12 +135,16 @@ export class ActionLogBufferService {
       assessmentLayerNextStateId?: string | null;
       status: ActionLogStatusEnum;
     },
+    externalQueryRunner?: QueryRunner,
   ): Promise<ActionLog> {
-    const queryRunner = this.dataSource.createQueryRunner();
+    const queryRunner = externalQueryRunner || this.dataSource.createQueryRunner();
+    const shouldManageTransaction = !externalQueryRunner;
+
     try {
-      await queryRunner.connect();
-      await queryRunner.startTransaction();
-      await this.acquireScopeLock(queryRunner, key);
+      if (shouldManageTransaction) {
+        await queryRunner.connect();
+        await queryRunner.startTransaction();
+      }
 
       const pendingChanges = await this.getPendingChanges(key, queryRunner);
       const resolvedStateIds = this.resolveStateIds(pendingChanges, logData);
@@ -157,7 +162,10 @@ export class ActionLogBufferService {
             assessmentLayerId: key.assessmentLayerId || null,
             changes: undefined,
           });
-        await queryRunner.commitTransaction();
+        
+        if (shouldManageTransaction) {
+          await queryRunner.commitTransaction();
+        }
         return actionLog;
       }
 
@@ -194,10 +202,13 @@ export class ActionLogBufferService {
       this.logger.log(
         `Flushed ${pendingChanges.length} pending changes to ActionLog ${actionLog.id}`,
       );
-      await queryRunner.commitTransaction();
+      
+      if (shouldManageTransaction) {
+        await queryRunner.commitTransaction();
+      }
       return actionLog;
     } catch (error) {
-      if (queryRunner.isTransactionActive) {
+      if (shouldManageTransaction && queryRunner.isTransactionActive) {
         await queryRunner.rollbackTransaction();
       }
       this.logger.error(
@@ -206,22 +217,10 @@ export class ActionLogBufferService {
       );
       throw error;
     } finally {
-      await queryRunner.release();
+      if (shouldManageTransaction) {
+        await queryRunner.release();
+      }
     }
-  }
-
-  //------------------------------
-  private async acquireScopeLock(
-    queryRunner: QueryRunner,
-    key: {
-      assessmentRequestId: string;
-      assessmentLayerId?: string;
-    },
-  ) {
-    const scopeKey = `${key.assessmentRequestId}:${key.assessmentLayerId ?? 'request'}`;
-    await queryRunner.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
-      scopeKey,
-    ]);
   }
 
   //------------------------------

@@ -208,6 +208,7 @@ export class AssessmentLayerRepository extends AbstractRepository<AssessmentLaye
             assessmentLayerCurrentStateId: layerCurrentStateId,
             assessmentLayerNextStateId: stateTransition.id,
           },
+          queryRunner,
         );
       }
 
@@ -379,6 +380,7 @@ export class AssessmentLayerRepository extends AbstractRepository<AssessmentLaye
             assessmentLayerCurrentStateId: layerCurrentStateId,
             assessmentLayerNextStateId: stateTransition.id,
           },
+          queryRunner,
         );
       }
 

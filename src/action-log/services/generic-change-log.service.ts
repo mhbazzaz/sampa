@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ChangelogConfig } from 'src/common/interfaces/change-log-config.interface';
 import { ChangeLog } from 'src/common/interfaces/change-log.interface';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
 @Injectable()
 export class GenericChangelogService {
@@ -91,14 +91,16 @@ export class GenericChangelogService {
         async ([repository, group]) => {
           if (group.ids.size === 0) return;
 
-          const entities = await repository.findByIds(Array.from(group.ids));
-          const entityMap = new Map(entities.map((e) => [e.id, e]));
+          const entities = await repository.find({
+            where: { id: In(Array.from(group.ids)) } as any,
+          });
+          const entityMap = new Map(entities.map((e: any) => [e.id, e]));
 
           for (const change of group.changes) {
-            const oldEntity = change.oldValue
+            const oldEntity: any = change.oldValue
               ? entityMap.get(change.oldValue)
               : null;
-            const newEntity = change.newValue
+            const newEntity: any = change.newValue
               ? entityMap.get(change.newValue)
               : null;
 

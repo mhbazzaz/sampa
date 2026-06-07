@@ -318,7 +318,6 @@ export class AssessmentLayerService {
           ],
         );
       }
-      await queryRunner.commitTransaction();
 
       await this.actionLogBufferService.flushToActionLog(
         {
@@ -335,7 +334,10 @@ export class AssessmentLayerService {
           assessmentLayerCurrentStateId: layerCurrentStateId,
           assessmentLayerNextStateId: stateTransition.id,
         },
+        queryRunner,
       );
+
+      await queryRunner.commitTransaction();
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -476,7 +478,6 @@ export class AssessmentLayerService {
       );
 
       // }
-      await queryRunner.commitTransaction();
 
       await this.actionLogBufferService.flushToActionLog(
         {
@@ -493,7 +494,10 @@ export class AssessmentLayerService {
           assessmentLayerCurrentStateId: layerCurrentStateId,
           assessmentLayerNextStateId: stateTransition.id,
         },
+        queryRunner,
       );
+
+      await queryRunner.commitTransaction();
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -688,8 +692,6 @@ export class AssessmentLayerService {
         }
       }
 
-      await queryRunner.commitTransaction();
-
       await this.actionLogBufferService.flushToActionLog(
         {
           assessmentRequestId: requestLayer.assessmentRequestId,
@@ -705,7 +707,10 @@ export class AssessmentLayerService {
           assessmentLayerCurrentStateId: layerCurrentStateId,
           assessmentLayerNextStateId: stateTransition.id,
         },
+        queryRunner,
       );
+
+      await queryRunner.commitTransaction();
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -804,8 +809,6 @@ export class AssessmentLayerService {
         }
       }
 
-      await queryRunner.commitTransaction();
-
       for (let i = 0; i < requestLayers.length; i++) {
         const requestLayer = requestLayers[i];
 
@@ -825,8 +828,11 @@ export class AssessmentLayerService {
             assessmentLayerCurrentStateId: requestLayer.stateId,
             assessmentLayerNextStateId: stateTransition.id,
           },
+          queryRunner,
         );
       }
+
+      await queryRunner.commitTransaction();
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -936,8 +942,6 @@ export class AssessmentLayerService {
         }
       }
 
-      await queryRunner.commitTransaction();
-
       await this.actionLogBufferService.flushToActionLog(
         {
           assessmentRequestId: requestLayer.assessmentRequestId,
@@ -953,7 +957,10 @@ export class AssessmentLayerService {
           assessmentLayerCurrentStateId: layerCurrentStateId,
           assessmentLayerNextStateId: stateTransition.id,
         },
+        queryRunner,
       );
+
+      await queryRunner.commitTransaction();
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;

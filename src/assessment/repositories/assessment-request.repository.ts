@@ -413,138 +413,277 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
 
   //------------------------------
   async getAssessmentReports(filters: AssessmentReportFilterDto) {
-    const query = this.assessmentRequestRepository
+    // Build subquery to apply filters on requests and layers
+    const requestSubQuery = this.assessmentRequestRepository
       .createQueryBuilder('request')
-      // .distinct(true)
-      .leftJoinAndSelect('request.asset', 'asset')
-      .leftJoinAndSelect('request.state', 'state')
-      .leftJoinAndSelect('request.assessmentLayers', 'layer')
-      .leftJoinAndSelect('layer.assessmentType', 'assessmentType')
-      .leftJoinAndSelect('layer.state', 'layerState');
+      .select('request.id')
+      .leftJoin('request.assessmentLayers', 'layer')
+      .leftJoin('request.asset', 'asset');
+
+    let hasRequestFilters = false;
 
     if (filters.startTimeFrom) {
-      query.andWhere('request.createdAt >= :startTimeFrom', {
+      requestSubQuery.andWhere('request.createdAt >= :startTimeFrom', {
         startTimeFrom: new Date(filters.startTimeFrom),
       });
+      hasRequestFilters = true;
     }
 
     if (filters.startTimeTo) {
-      query.andWhere('request.createdAt <= :startTimeTo', {
+      requestSubQuery.andWhere('request.createdAt <= :startTimeTo', {
         startTimeTo: new Date(filters.startTimeTo),
       });
+      hasRequestFilters = true;
     }
 
     if (filters.lastActTimeFrom) {
-      query.andWhere('request.updatedAt >= :lastActTimeFrom', {
+      requestSubQuery.andWhere('request.updatedAt >= :lastActTimeFrom', {
         lastActTimeFrom: new Date(filters.lastActTimeFrom),
       });
+      hasRequestFilters = true;
     }
 
     if (filters.lastActTimeTo) {
-      query.andWhere('request.updatedAt <= :lastActTimeTo', {
+      requestSubQuery.andWhere('request.updatedAt <= :lastActTimeTo', {
         lastActTimeTo: new Date(filters.lastActTimeTo),
       });
+      hasRequestFilters = true;
     }
 
     if (filters.layerStatuses?.length) {
-      query.andWhere('layer.stateId IN (:...layerStatuses)', {
+      requestSubQuery.andWhere('layer.stateId IN (:...layerStatuses)', {
         layerStatuses: filters.layerStatuses,
       });
-    }
-
-    if (filters.assetReferenceId) {
-      query.andWhere('asset.referenceId = :assetReferenceId', {
-        assetReferenceId: filters.assetReferenceId,
-      });
-    }
-
-    if (filters.assetTitle) {
-      query.andWhere('LOWER(asset.title) LIKE LOWER(:assetTitle)', {
-        assetTitle: `%${filters.assetTitle}%`,
-      });
-    }
-
-    if (filters.assetTypeId) {
-      query.andWhere('asset.assetTypeId = :assetTypeId', {
-        assetTypeId: filters.assetTypeId,
-      });
+      hasRequestFilters = true;
     }
 
     if (
       filters.hasCriticalVulnerabilities !== undefined &&
       filters.hasCriticalVulnerabilities !== null
     ) {
-      query.andWhere(
+      requestSubQuery.andWhere(
         'layer.criticalVulnerabilitiesCount >= :criticalThreshold',
         {
           criticalThreshold: filters.hasCriticalVulnerabilities,
         },
       );
+      hasRequestFilters = true;
     }
 
     if (
       filters.hasHighVulnerabilities !== undefined &&
       filters.hasHighVulnerabilities !== null
     ) {
-      query.andWhere('layer.highVulnerabilitiesCount >= :highThreshold', {
-        highThreshold: filters.hasHighVulnerabilities,
-      });
+      requestSubQuery.andWhere(
+        'layer.highVulnerabilitiesCount >= :highThreshold',
+        {
+          highThreshold: filters.hasHighVulnerabilities,
+        },
+      );
+      hasRequestFilters = true;
     }
 
     if (
       filters.hasMediumVulnerabilities !== undefined &&
       filters.hasMediumVulnerabilities !== null
     ) {
-      query.andWhere('layer.mediumVulnerabilitiesCount >= :mediumThreshold', {
-        mediumThreshold: filters.hasMediumVulnerabilities,
-      });
+      requestSubQuery.andWhere(
+        'layer.mediumVulnerabilitiesCount >= :mediumThreshold',
+        {
+          mediumThreshold: filters.hasMediumVulnerabilities,
+        },
+      );
+      hasRequestFilters = true;
     }
 
     if (
       filters.hasLowVulnerabilities !== undefined &&
       filters.hasLowVulnerabilities !== null
     ) {
-      query.andWhere('layer.lowVulnerabilitiesCount >= :lowThreshold', {
-        lowThreshold: filters.hasLowVulnerabilities,
+      requestSubQuery.andWhere(
+        'layer.lowVulnerabilitiesCount >= :lowThreshold',
+        {
+          lowThreshold: filters.hasLowVulnerabilities,
+        },
+      );
+      hasRequestFilters = true;
+    }
+
+    // Get filtered request IDs
+    const filteredRequests = hasRequestFilters
+      ? await requestSubQuery.getMany()
+      : [];
+    const filteredRequestIds = filteredRequests.map((req: any) => req.id);
+
+    // Build main query starting from assets
+    const assetRepository = this.assessmentRequestRepository.manager.getRepository('AssetToAudit');
+    const assetQuery = assetRepository
+      .createQueryBuilder('asset')
+      .leftJoinAndSelect('asset.assetType', 'assetType')
+      .leftJoinAndSelect('asset.assessmentRequests', 'request')
+      .leftJoinAndSelect('request.state', 'requestState')
+      .leftJoinAndSelect('request.assessmentLayers', 'layer')
+      .leftJoinAndSelect('layer.assessmentType', 'assessmentType')
+      .leftJoinAndSelect('layer.state', 'layerState');
+
+    // Apply asset filters
+    if (filters.assetReferenceId) {
+      assetQuery.andWhere('asset.referenceId = :assetReferenceId', {
+        assetReferenceId: filters.assetReferenceId,
       });
     }
 
-    query
-      .orderBy('request.createdAt', 'DESC')
+    if (filters.assetTitle) {
+      assetQuery.andWhere('LOWER(asset.title) LIKE LOWER(:assetTitle)', {
+        assetTitle: `%${filters.assetTitle}%`,
+      });
+    }
+
+    if (filters.assetTypeId) {
+      assetQuery.andWhere('asset.assetTypeId = :assetTypeId', {
+        assetTypeId: filters.assetTypeId,
+      });
+    }
+
+    // Filter assets that have matching requests
+    if (hasRequestFilters && filteredRequestIds.length > 0) {
+      assetQuery.andWhere('request.id IN (:...filteredRequestIds)', {
+        filteredRequestIds,
+      });
+    } else if (hasRequestFilters && filteredRequestIds.length === 0) {
+      // No matching requests found, return empty result
+      return {
+        data: [],
+        total: 0,
+      };
+    }
+
+    assetQuery
+      .orderBy('asset.createdAt', 'DESC')
       .skip(filters.skip)
       .take(filters.take);
 
-    const [data, total] = await query.getManyAndCount();
+    const [data, total] = await assetQuery.getManyAndCount();
 
-    const transformedData = data.map((request) => {
-      const layers = request.assessmentLayers || [];
+    // Transform data to include assessment information
+    const transformedData = data.map((asset: any) => {
+      const requests = asset.assessmentRequests || [];
 
-      const totalCriticalVulnerabilities = layers.reduce(
-        (sum, layer) => sum + (layer.criticalVulnerabilitiesCount || 0),
+      // Filter requests based on the applied filters
+      const filteredAssetRequests =
+        hasRequestFilters && filteredRequestIds.length > 0
+          ? requests.filter((req: any) => filteredRequestIds.includes(req.id))
+          : requests;
+
+      // Calculate totals for each request
+      const requestsWithTotals = filteredAssetRequests.map((request: any) => {
+        const layers = request.assessmentLayers || [];
+
+        // Apply layer filters if specified
+        let filteredLayers = layers;
+        if (filters.layerStatuses && filters.layerStatuses.length) {
+          filteredLayers = layers.filter((layer: any) =>
+            filters.layerStatuses?.includes(layer.stateId),
+          );
+        }
+
+        if (
+          filters.hasCriticalVulnerabilities !== undefined &&
+          filters.hasCriticalVulnerabilities !== null
+        ) {
+          filteredLayers = filteredLayers.filter(
+            (layer: any) =>
+              layer.criticalVulnerabilitiesCount >=
+              (filters.hasCriticalVulnerabilities as number),
+          );
+        }
+
+        if (
+          filters.hasHighVulnerabilities !== undefined &&
+          filters.hasHighVulnerabilities !== null
+        ) {
+          filteredLayers = filteredLayers.filter(
+            (layer: any) =>
+              layer.highVulnerabilitiesCount >= (filters.hasHighVulnerabilities as number),
+          );
+        }
+
+        if (
+          filters.hasMediumVulnerabilities !== undefined &&
+          filters.hasMediumVulnerabilities !== null
+        ) {
+          filteredLayers = filteredLayers.filter(
+            (layer: any) =>
+              layer.mediumVulnerabilitiesCount >=
+              (filters.hasMediumVulnerabilities as number),
+          );
+        }
+
+        if (
+          filters.hasLowVulnerabilities !== undefined &&
+          filters.hasLowVulnerabilities !== null
+        ) {
+          filteredLayers = filteredLayers.filter(
+            (layer: any) =>
+              layer.lowVulnerabilitiesCount >= (filters.hasLowVulnerabilities as number),
+          );
+        }
+
+        const totalCriticalVulnerabilities = filteredLayers.reduce(
+          (sum: number, layer: any) => sum + (layer.criticalVulnerabilitiesCount || 0),
+          0,
+        );
+
+        const totalHighVulnerabilities = filteredLayers.reduce(
+          (sum: number, layer: any) => sum + (layer.highVulnerabilitiesCount || 0),
+          0,
+        );
+
+        const totalMediumVulnerabilities = filteredLayers.reduce(
+          (sum: number, layer: any) => sum + (layer.mediumVulnerabilitiesCount || 0),
+          0,
+        );
+
+        const totalLowVulnerabilities = filteredLayers.reduce(
+          (sum: number, layer: any) => sum + (layer.lowVulnerabilitiesCount || 0),
+          0,
+        );
+
+        return {
+          ...request,
+          assessmentLayers: filteredLayers,
+          totalCriticalVulnerabilities,
+          totalHighVulnerabilities,
+          totalMediumVulnerabilities,
+          totalLowVulnerabilities,
+        };
+      });
+
+      // Calculate asset-level totals
+      const assetTotalCritical = requestsWithTotals.reduce(
+        (sum: number, req: any) => sum + (req.totalCriticalVulnerabilities || 0),
         0,
       );
-
-      const totalHighVulnerabilities = layers.reduce(
-        (sum, layer) => sum + (layer.highVulnerabilitiesCount || 0),
+      const assetTotalHigh = requestsWithTotals.reduce(
+        (sum: number, req: any) => sum + (req.totalHighVulnerabilities || 0),
         0,
       );
-
-      const totalMediumVulnerabilities = layers.reduce(
-        (sum, layer) => sum + (layer.mediumVulnerabilitiesCount || 0),
+      const assetTotalMedium = requestsWithTotals.reduce(
+        (sum: number, req: any) => sum + (req.totalMediumVulnerabilities || 0),
         0,
       );
-
-      const totalLowVulnerabilities = layers.reduce(
-        (sum, layer) => sum + (layer.lowVulnerabilitiesCount || 0),
+      const assetTotalLow = requestsWithTotals.reduce(
+        (sum: number, req: any) => sum + (req.totalLowVulnerabilities || 0),
         0,
       );
 
       return {
-        ...request,
-        totalCriticalVulnerabilities,
-        totalHighVulnerabilities,
-        totalMediumVulnerabilities,
-        totalLowVulnerabilities,
+        ...asset,
+        assessmentRequests: requestsWithTotals,
+        totalCriticalVulnerabilities: assetTotalCritical,
+        totalHighVulnerabilities: assetTotalHigh,
+        totalMediumVulnerabilities: assetTotalMedium,
+        totalLowVulnerabilities: assetTotalLow,
       };
     });
 
