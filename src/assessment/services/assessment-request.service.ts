@@ -1269,7 +1269,7 @@ export class AssessmentRequestService {
 
   //------------------------------
   async getAssessmentReports(filters: AssessmentReportFilterDto) {
-    return await this.assessmentRequestRepository.getAssessmentReports(filters);
+    return this.assessmentRequestRepository.getAssessmentReports(filters);
   }
 
   //------------------------------

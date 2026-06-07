@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { useContainer } from 'class-validator';
+import * as cookieParser from 'cookie-parser';
 import * as basicAuth from 'express-basic-auth';
 import { I18nValidationPipe } from 'nestjs-i18n';
 import { join } from 'path';
@@ -9,6 +10,7 @@ import { AppModule } from './app.module';
 import { GlobalHttpExceptionFilter } from './common/filters/global-exception.filter';
 import { Dotenv } from './config/dotenv';
 import { LoggerService } from './logger/logger.service';
+import { Vault } from './vault/vault';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -17,7 +19,20 @@ async function bootstrap() {
     prefix: '/sampa/files/test-case/images',
   });
 
-  app.enableCors();
+  app.use(cookieParser());
+
+  const TRUSTED_FRONTEND_URLS = await Vault.instance.get(
+    'TRUSTED_FRONTEND_URLS',
+    'share',
+  );
+
+  app.enableCors({
+    origin: TRUSTED_FRONTEND_URLS.split(','),
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    credentials: true,
+  });
+
   app.setGlobalPrefix('sampa/api/v1');
 
   const loggerClient = app.get(LoggerService);

@@ -22,6 +22,7 @@ import { GetCartableDto } from 'src/common/pagination-dto/get-cartable.dto';
 import { IsUUIDPipe } from 'src/common/pipes/parse-uuid.pipe';
 import { Member } from 'src/member/entities/member.entity';
 import { Role } from 'src/role/entities/role.entity';
+import { AssessmentReportFilterDto } from '../dto/input/assessment-report-filter.dto';
 import { CreateAssessmentRequestDto } from '../dto/input/create-assessment-request.dto';
 import { FindAllAssessmentQueryDto } from '../dto/input/find-all-assessment-request-query.dto';
 import { RequestClosureDto } from '../dto/input/request-closure.dto';
@@ -241,6 +242,28 @@ export class AssessmentController {
       statusCode: 200,
       message: 'successful',
       data,
+    });
+  }
+
+  //------------------------------
+  @ApiTags('Assessment')
+  @ApiOperation({
+    summary: 'Get Assessment Reports',
+  })
+  @UseGuards(AuthorizationGuard)
+  @UseGuards(UserGuard)
+  @SetMetadata(AuthorizationMetaDataEnum.Action, [ActionEnum.Read])
+  @SetMetadata(AuthorizationMetaDataEnum.Process, ProcessEnum.AssessmentRequest)
+  @Get('assessment/reports')
+  async getAssessmentReports(
+    @Query() filters: AssessmentReportFilterDto,
+  ): Promise<GetAssessmentDto> {
+    const result =
+      await this.assessmentRequestService.getAssessmentReports(filters);
+    return responseGenerator({
+      statusCode: 200,
+      message: 'successful',
+      data: result,
     });
   }
 

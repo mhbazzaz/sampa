@@ -19,10 +19,10 @@ import {
   QueryRunner,
   Repository,
 } from 'typeorm';
+import { AssessmentReportFilterDto } from '../dto/input/assessment-report-filter.dto';
 import { FindAllAssessmentQueryDto } from '../dto/input/find-all-assessment-request-query.dto';
 import { AssessmentLayer } from '../entities/assessment-layer.entity';
 import { AssessmentRequest } from '../entities/assessment-request.entity';
-import { AssessmentReportFilterDto } from '../dto/input/assessment-report-filter.dto';
 
 @Injectable()
 export class AssessmentRequestRepository extends AbstractRepository<AssessmentRequest> {
@@ -415,33 +415,41 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
   async getAssessmentReports(filters: AssessmentReportFilterDto) {
     const query = this.assessmentRequestRepository
       .createQueryBuilder('request')
+      // .distinct(true)
       .leftJoinAndSelect('request.asset', 'asset')
       .leftJoinAndSelect('request.state', 'state')
-      .leftJoinAndSelect('request.assessmentLayers', 'layer');
+      .leftJoinAndSelect('request.assessmentLayers', 'layer')
+      .leftJoinAndSelect('layer.assessmentType', 'assessmentType')
+      .leftJoinAndSelect('layer.state', 'layerState');
 
-    if (filters.startTimeFrom || filters.startTimeTo) {
-      const from = filters.startTimeFrom
-        ? new Date(filters.startTimeFrom)
-        : null;
-      const to = filters.startTimeTo ? new Date(filters.startTimeTo) : null;
-      query.andWhere('request.createdAt BETWEEN :from AND :to', { from, to });
+    if (filters.startTimeFrom) {
+      query.andWhere('request.createdAt >= :startTimeFrom', {
+        startTimeFrom: new Date(filters.startTimeFrom),
+      });
     }
 
-    if (filters.lastActTimeFrom || filters.lastActTimeTo) {
-      const from = filters.lastActTimeFrom
-        ? new Date(filters.lastActTimeFrom)
-        : null;
-      const to = filters.lastActTimeTo ? new Date(filters.lastActTimeTo) : null;
-      query.andWhere('request.updatedAt BETWEEN :from AND :to', { from, to });
+    if (filters.startTimeTo) {
+      query.andWhere('request.createdAt <= :startTimeTo', {
+        startTimeTo: new Date(filters.startTimeTo),
+      });
     }
 
-    if (filters.layerStatuses && filters.layerStatuses.length > 0) {
+    if (filters.lastActTimeFrom) {
+      query.andWhere('request.updatedAt >= :lastActTimeFrom', {
+        lastActTimeFrom: new Date(filters.lastActTimeFrom),
+      });
+    }
+
+    if (filters.lastActTimeTo) {
+      query.andWhere('request.updatedAt <= :lastActTimeTo', {
+        lastActTimeTo: new Date(filters.lastActTimeTo),
+      });
+    }
+
+    if (filters.layerStatuses?.length) {
       query.andWhere('layer.stateId IN (:...layerStatuses)', {
         layerStatuses: filters.layerStatuses,
       });
-      query.groupBy('request.id');
-    } else {
-      query.groupBy('request.id');
     }
 
     if (filters.assetReferenceId) {
@@ -462,21 +470,87 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
       });
     }
 
-    const page = filters.page || 1;
-    const limit = filters.limit || 50;
-    const skip = (page - 1) * limit;
+    if (
+      filters.hasCriticalVulnerabilities !== undefined &&
+      filters.hasCriticalVulnerabilities !== null
+    ) {
+      query.andWhere(
+        'layer.criticalVulnerabilitiesCount >= :criticalThreshold',
+        {
+          criticalThreshold: filters.hasCriticalVulnerabilities,
+        },
+      );
+    }
 
-    query.orderBy('request.createdAt', 'DESC').skip(skip).take(limit);
+    if (
+      filters.hasHighVulnerabilities !== undefined &&
+      filters.hasHighVulnerabilities !== null
+    ) {
+      query.andWhere('layer.highVulnerabilitiesCount >= :highThreshold', {
+        highThreshold: filters.hasHighVulnerabilities,
+      });
+    }
+
+    if (
+      filters.hasMediumVulnerabilities !== undefined &&
+      filters.hasMediumVulnerabilities !== null
+    ) {
+      query.andWhere('layer.mediumVulnerabilitiesCount >= :mediumThreshold', {
+        mediumThreshold: filters.hasMediumVulnerabilities,
+      });
+    }
+
+    if (
+      filters.hasLowVulnerabilities !== undefined &&
+      filters.hasLowVulnerabilities !== null
+    ) {
+      query.andWhere('layer.lowVulnerabilitiesCount >= :lowThreshold', {
+        lowThreshold: filters.hasLowVulnerabilities,
+      });
+    }
+
+    query
+      .orderBy('request.createdAt', 'DESC')
+      .skip(filters.skip)
+      .take(filters.take);
+
     const [data, total] = await query.getManyAndCount();
 
+    const transformedData = data.map((request) => {
+      const layers = request.assessmentLayers || [];
+
+      const totalCriticalVulnerabilities = layers.reduce(
+        (sum, layer) => sum + (layer.criticalVulnerabilitiesCount || 0),
+        0,
+      );
+
+      const totalHighVulnerabilities = layers.reduce(
+        (sum, layer) => sum + (layer.highVulnerabilitiesCount || 0),
+        0,
+      );
+
+      const totalMediumVulnerabilities = layers.reduce(
+        (sum, layer) => sum + (layer.mediumVulnerabilitiesCount || 0),
+        0,
+      );
+
+      const totalLowVulnerabilities = layers.reduce(
+        (sum, layer) => sum + (layer.lowVulnerabilitiesCount || 0),
+        0,
+      );
+
+      return {
+        ...request,
+        totalCriticalVulnerabilities,
+        totalHighVulnerabilities,
+        totalMediumVulnerabilities,
+        totalLowVulnerabilities,
+      };
+    });
+
     return {
-      data,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
+      data: transformedData,
+      total,
     };
   }
 
