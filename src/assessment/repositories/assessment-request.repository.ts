@@ -450,9 +450,16 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
       hasRequestFilters = true;
     }
 
-    if (filters.layerStatuses?.length) {
-      requestSubQuery.andWhere('layer.stateId IN (:...layerStatuses)', {
-        layerStatuses: filters.layerStatuses,
+    if (filters.requestStateIds?.length) {
+      requestSubQuery.andWhere('request.stateId IN (:...requestStateIds)', {
+        requestStateIds: filters.requestStateIds,
+      });
+      hasRequestFilters = true;
+    }
+
+    if (filters.layerStateIds?.length) {
+      requestSubQuery.andWhere('layer.stateId IN (:...layerStateIds)', {
+        layerStateIds: filters.layerStateIds,
       });
       hasRequestFilters = true;
     }
@@ -581,9 +588,9 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
 
         // Apply layer filters if specified
         let filteredLayers = layers;
-        if (filters.layerStatuses && filters.layerStatuses.length) {
+        if (filters.layerStateIds && filters.layerStateIds.length) {
           filteredLayers = layers.filter((layer: any) =>
-            filters.layerStatuses?.includes(layer.stateId),
+            filters.layerStateIds?.includes(layer.stateId),
           );
         }
 

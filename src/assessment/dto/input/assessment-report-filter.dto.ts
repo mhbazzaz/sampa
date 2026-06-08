@@ -39,7 +39,16 @@ export class AssessmentReportFilterDto extends PaginationDto {
     each: true,
   })
   @IsOptional()
-  layerStatuses?: string[];
+  layerStateIds?: string[];
+
+  @ApiPropertyOptional()
+  @IsArray()
+  @IsString({
+    message: i18nValidationMessage('validation.IsString'),
+    each: true,
+  })
+  @IsOptional()
+  requestStateIds?: string[];
 
   @ApiPropertyOptional()
   @IsString({ message: i18nValidationMessage('validation.IsString') })
