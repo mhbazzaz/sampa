@@ -6,6 +6,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
+import axios from 'axios';
+import { Vault } from 'src/common/vault';
 import { ActionLogRepository } from 'src/action-log/repositories/action-log.repository';
 import { ActionLogBufferService } from 'src/action-log/services/action-log-buffer.service';
 import { ChangelogConfigFactory } from 'src/action-log/services/change-log-configs';
@@ -1269,6 +1271,45 @@ export class AssessmentRequestService {
 
   //------------------------------
   async getAssessmentReports(filters: AssessmentReportFilterDto) {
+    // Convert applicant employee IDs to user IDs via IDP API
+    if (filters.applicantEmployeeIds && filters.applicantEmployeeIds.length > 0) {
+      try {
+        const IDP_SERVICE_INTERNAL_TOKEN = await Vault.instance.get(
+          'IDP_SERVICE_INTERNAL_TOKEN',
+          'share',
+        );
+        const IDP_SERVICE_URL = await Vault.instance.get('IDP_SERVICE_URL');
+
+        const userIdPromises = filters.applicantEmployeeIds.map(async (employeeId) => {
+          try {
+            const { data } = await axios.post(
+              `${IDP_SERVICE_URL}/idp/api/v1/users`,
+              {
+                domain: 'iranet',
+                employeeId: employeeId,
+              },
+              {
+                headers: {
+                  'x-internal-communication-token': IDP_SERVICE_INTERNAL_TOKEN,
+                },
+              },
+            );
+            return data.data.id;
+          } catch (error) {
+            // If employee ID is not found, return null and filter it out
+            return null;
+          }
+        });
+
+        const userIds = await Promise.all(userIdPromises);
+        filters.applicantIds = userIds.filter((id) => id !== null) as string[];
+      } catch (error) {
+        throw new InternalServerErrorException(
+          'Failed to convert employee IDs to user IDs',
+        );
+      }
+    }
+
     return this.assessmentRequestRepository.getAssessmentReports(filters);
   }
 

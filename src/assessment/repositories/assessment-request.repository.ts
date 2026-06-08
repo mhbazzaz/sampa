@@ -464,6 +464,13 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
       hasRequestFilters = true;
     }
 
+    if (filters.applicantIds?.length) {
+      requestSubQuery.andWhere('request.applicantId IN (:...applicantIds)', {
+        applicantIds: filters.applicantIds,
+      });
+      hasRequestFilters = true;
+    }
+
     if (
       filters.hasCriticalVulnerabilities !== undefined &&
       filters.hasCriticalVulnerabilities !== null

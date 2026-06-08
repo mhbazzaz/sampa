@@ -51,6 +51,18 @@ export class AssessmentReportFilterDto extends PaginationDto {
   requestStateIds?: string[];
 
   @ApiPropertyOptional()
+  @IsArray()
+  @IsString({
+    message: i18nValidationMessage('validation.IsString'),
+    each: true,
+  })
+  @IsOptional()
+  applicantEmployeeIds?: string[];
+
+  // Internal field - populated by service after IDP conversion
+  applicantIds?: string[];
+
+  @ApiPropertyOptional()
   @IsString({ message: i18nValidationMessage('validation.IsString') })
   @IsUUID()
   @Transform(({ value }) => value || undefined)
