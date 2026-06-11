@@ -2,6 +2,7 @@ import { AssessmentLayer } from 'src/assessment/entities/assessment-layer.entity
 import { AssessmentRequest } from 'src/assessment/entities/assessment-request.entity';
 import { ActionLogStatusEnum } from 'src/common/enums/action-log.enum';
 import { ActionEnum } from 'src/common/enums/action.enum';
+import { EntityTypeEnum } from 'src/common/enums/entity-type.enum';
 import { AbstractEntity } from 'src/database/abstract.entity';
 import { Member } from 'src/member/entities/member.entity';
 import { State } from 'src/states/entities/state.entity';
@@ -74,9 +75,12 @@ export class ActionLog extends AbstractEntity<ActionLog> {
     nullable: true,
   })
   changes?: {
+    entityType?: EntityTypeEnum;
     updateData: string;
     oldValue: any;
     newValue: any;
+    oldDisplayValue?: any;
+    newDisplayValue?: any;
   }[];
 
   @Column({

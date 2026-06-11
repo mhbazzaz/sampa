@@ -5,6 +5,8 @@
  * and provides templates for future unit/integration tests.
  */
 
+import { EntityTypeEnum } from 'src/common/enums/entity-type.enum';
+
 // ============================================================================
 // EXAMPLE FLOW: Spec Content Update → State Transition
 // ============================================================================
@@ -77,7 +79,7 @@ describe('ActionLogBufferService', () => {
       };
       
       const details = {
-        entityType: 'spec' as const,
+        entityType: EntityTypeEnum.Spec,
         beforeEntity: {},
         updateDto: { value: JSON.stringify({ key: 'value' }) },
         userId: 'user-789',
@@ -93,7 +95,7 @@ describe('ActionLogBufferService', () => {
         expect.objectContaining({
           assessmentRequestId: key.assessmentRequestId,
           assessmentLayerId: key.assessmentLayerId,
-          entityType: 'spec',
+          entityType: EntityTypeEnum.Spec,
           isFlushed: false,
         })
       );
@@ -105,7 +107,7 @@ describe('ActionLogBufferService', () => {
       };
       
       const details = {
-        entityType: 'testcase' as const,
+        entityType: EntityTypeEnum.Testcase,
         beforeEntity: { observations: 'old value' },
         updateDto: { observations: 'new value' },
         userId: 'user-789',
@@ -147,7 +149,7 @@ describe('ActionLogBufferService', () => {
       mockPendingChangeRepo.find.mockResolvedValue([
         {
           id: 'pending-1',
-          entityType: 'spec',
+          entityType: EntityTypeEnum.Spec,
           beforeEntity: {},
           updateDto: { value: 'new-value' },
           isFlushed: false,
@@ -355,7 +357,7 @@ describe('Action Log Integration', () => {
       await actionLogBufferService.addChange(
         { assessmentRequestId: request.id, assessmentLayerId: layer.id },
         {
-          entityType: 'spec',
+          entityType: EntityTypeEnum.Spec,
           beforeEntity: {},
           updateDto: { value: 'test' },
           userId: testMember.id,

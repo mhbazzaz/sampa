@@ -5,6 +5,7 @@ import { AssessmentLayer } from 'src/assessment/entities/assessment-layer.entity
 import { AssessmentRequest } from 'src/assessment/entities/assessment-request.entity';
 import { AssessmentLayerRepository } from 'src/assessment/repositories/assessment-layer.repository';
 import { AssessmentRequestRepository } from 'src/assessment/repositories/assessment-request.repository';
+import { EntityTypeEnum } from 'src/common/enums/entity-type.enum';
 import { ValidationService } from 'src/common/validations/schema-validation.service';
 import { GroupMembershipRepository } from 'src/group-membership/repositories/group-membership.repository';
 import { Member } from 'src/member/entities/member.entity';
@@ -101,7 +102,7 @@ export class RequestSpecContentService {
       await this.actionLogBufferService.addChange(
         { assessmentRequestId },
         {
-          entityType: 'spec',
+          entityType: EntityTypeEnum.Spec,
           beforeEntity: {},
           updateDto: body,
           userId: member.id,
@@ -122,7 +123,7 @@ export class RequestSpecContentService {
       await this.actionLogBufferService.addChange(
         { assessmentRequestId },
         {
-          entityType: 'spec',
+          entityType: EntityTypeEnum.Spec,
           beforeEntity: beforeEntity || {},
           updateDto: body,
           userId: member.id,
@@ -189,7 +190,7 @@ export class RequestSpecContentService {
       await this.actionLogBufferService.addChange(
         { assessmentRequestId: layer.assessmentRequestId, assessmentLayerId },
         {
-          entityType: 'spec',
+          entityType: EntityTypeEnum.Spec,
           beforeEntity: {},
           updateDto: body,
           userId: member.id,
@@ -213,7 +214,7 @@ export class RequestSpecContentService {
       await this.actionLogBufferService.addChange(
         { assessmentRequestId: layer.assessmentRequestId, assessmentLayerId },
         {
-          entityType: 'spec',
+          entityType: EntityTypeEnum.Spec,
           beforeEntity: beforeEntity || {},
           updateDto: body,
           userId: member.id,

@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
 import { ActionLogBufferService } from 'src/action-log/services/action-log-buffer.service';
+import { EntityTypeEnum } from 'src/common/enums/entity-type.enum';
 import { TestCaseRemediateApproachEnum } from 'src/common/enums/test-case-remediate-approach.enum';
 import { Member } from 'src/member/entities/member.entity';
 import { TestcaseContentRepository } from 'src/test-case/repositories/test-case-content.repository';
@@ -61,7 +62,7 @@ export class TestcaseRemediateService {
       await this.actionLogBufferService.addChange(
         { assessmentRequestId: existingContent.assessmentRequestId },
         {
-          entityType: 'remediate',
+          entityType: EntityTypeEnum.Remediate,
           beforeEntity: {},
           updateDto: data,
           userId: member.id,

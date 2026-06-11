@@ -10,10 +10,12 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { CurrentMember } from 'src/common/decorators/current-member.decorators';
 import { AdminGuard } from 'src/common/guards/admin.guard';
 import { UserGuard } from 'src/common/guards/user.guard';
 import { responseGenerator } from 'src/common/helpers/response-generator';
 import { PaginationDto } from 'src/common/pagination-dto/pagination.dto';
+import { Member } from 'src/member/entities/member.entity';
 import { CreateSpecItemDto } from '../dto/input/create-spec-item.dto';
 import { FindFilteredRequestSpecItemQueryDto } from '../dto/input/find-filtered-request-spec-item.dto';
 import { GetSpecItemDto } from '../dto/input/get-spec-item.dto';
@@ -137,8 +139,16 @@ export class RequestSpecItemController {
   })
   @UseGuards(AdminGuard)
   @Patch('admin/spec-item/:id')
-  async update(@Param('id') id: string, @Body() data: UpdateSpecItemDto) {
-    const result = await this.requestSpecItemService.update({ id }, data);
+  async update(
+    @Param('id') id: string,
+    @Body() data: UpdateSpecItemDto,
+    @CurrentMember() member: Member,
+  ) {
+    const result = await this.requestSpecItemService.update(
+      { id },
+      data,
+      member.id,
+    );
     return responseGenerator({
       statusCode: 200,
       message: 'successful',

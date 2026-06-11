@@ -474,6 +474,8 @@ export class AssessmentRequestService {
             assessmentLayerId: layer.id,
             layerCurrentStateId: layer.stateId,
             layerNextStateId: stateTransition.id,
+            requestCurrentStateId: requestCurrentStateId,
+            requestNextStateId: requestCurrentStateId, // Request state hasn't changed yet at this point
           });
 
           anyLayerUpdated = true;
@@ -1296,7 +1298,6 @@ export class AssessmentRequestService {
             );
             return data.data.id;
           } catch (error) {
-            // If employee ID is not found, return null and filter it out
             return null;
           }
         });

@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
+import { ActionLogBufferService } from 'src/action-log/services/action-log-buffer.service';
 import { AssessmentTypeRepository } from 'src/assessment/repositories/assessment-type.repository';
 import { AssetTypeRepository } from 'src/asset/repositories/asset-type.repository';
 import { ValidationService } from 'src/common/validations/schema-validation.service';
@@ -16,6 +17,7 @@ import { GetSpecItemDto } from '../dto/input/get-spec-item.dto';
 import { UpdateSpecItemDto } from '../dto/input/update-spec-item.dto';
 import { RequestSpecItem } from '../entities/request-spec-item.entity';
 import { RequestSpecItemRepository } from '../repositories/request-spec-item.repository';
+import { EntityTypeEnum } from 'src/common/enums/entity-type.enum';
 
 @Injectable()
 export class RequestSpecItemService {
@@ -26,6 +28,7 @@ export class RequestSpecItemService {
     private readonly environmentRepository: EnvironmentRepository,
     private readonly assessmentTypeRepository: AssessmentTypeRepository,
     private readonly i18nService: I18nService,
+    private readonly actionLogBufferService: ActionLogBufferService,
   ) {}
 
   //------------------------------
@@ -65,11 +68,14 @@ export class RequestSpecItemService {
   async update(
     data: FindOptionsWhere<RequestSpecItem>,
     updateRequestSpecItem: UpdateSpecItemDto,
+    userId?: string,
   ) {
     const updatePayload: Partial<RequestSpecItem> = {};
 
+    // Fetch current spec item with relations to track changes
     const currentSpec = await this.requestSpecItemRepository.findOne({
       where: data,
+      relations: { environments: true },
     });
 
     if (!currentSpec) {
@@ -80,6 +86,24 @@ export class RequestSpecItemService {
       );
     }
 
+    // Prepare beforeEntity for change tracking
+    const beforeEntity: any = {
+      id: currentSpec.id,
+      value: currentSpec.value,
+      isMultiValue: currentSpec.isMultiValue,
+      isOptional: currentSpec.isOptional,
+      name: currentSpec.name,
+      description: currentSpec.description,
+      requestSpecGroupId: currentSpec.requestSpecGroupId,
+      assetTypeId: currentSpec.assetTypeId,
+      environmentIds: currentSpec.environments?.map((env) => env.id) || [],
+    };
+
+    // Prepare updateDto for change tracking
+    const updateDto: any = {
+      id: currentSpec.id,
+    };
+
     const newEnvironments: string[] = [];
     for (const [key, value] of Object.entries(updateRequestSpecItem)) {
       const typedKey = key as keyof UpdateSpecItemDto;
@@ -89,6 +113,7 @@ export class RequestSpecItemService {
           case 'value':
             await this.validationService.validateSchema(value);
             updatePayload[typedKey] = JSON.stringify(value);
+            updateDto[typedKey] = JSON.stringify(value);
             break;
 
           case 'assessmentTypeIds':
@@ -104,6 +129,7 @@ export class RequestSpecItemService {
               );
             }
             updatePayload['assessmentType'] = assessmentTypes;
+            // Not tracking assessmentType changes in changelog for now
             break;
 
           case 'assetTypeId':
@@ -119,24 +145,58 @@ export class RequestSpecItemService {
               );
             }
             updatePayload[typedKey] = assetType.id;
+            updateDto[typedKey] = assetType.id;
             break;
 
           case 'environmentIds':
             updatePayload['environments'] = (value as string[]).map(
               (v) => new Environment({ id: v }),
             );
+            // Track environment changes as an array of IDs
+            updateDto['environmentIds'] = value as string[];
             break;
 
           default:
             if (typedKey !== 'environmentId') {
               updatePayload[typedKey] = value;
+              updateDto[typedKey] = value;
             }
             break;
         }
       }
     }
 
-    return await this.requestSpecItemRepository.update(data, updatePayload);
+    const result = await this.requestSpecItemRepository.update(data, updatePayload);
+
+    // Log changes if userId is provided and there are changes
+    if (userId && Object.keys(updateDto).length > 1) { // More than just 'id'
+      // Find all assessment requests that use this spec item to log changes
+      const specContents = await this.requestSpecItemRepository.query(
+        `SELECT DISTINCT "assessmentRequestId" FROM "request_spec_content" WHERE "requestSpecItemId" = $1`,
+        [currentSpec.id]
+      );
+
+      // If spec item is used in any requests, log the change
+      if (specContents && specContents.length > 0) {
+        for (const content of specContents) {
+          await this.actionLogBufferService.addChange(
+            { assessmentRequestId: content.assessmentRequestId },
+            {
+              entityType: EntityTypeEnum.Spec,
+              beforeEntity,
+              updateDto,
+              userId,
+              assessmentRequestCurrentStateId: null,
+              assessmentRequestNextStateId: null,
+              assessmentLayerCurrentStateId: null,
+              assessmentLayerNextStateId: null,
+            },
+          );
+        }
+      }
+    }
+
+    return result;
   }
 
   //------------------------------

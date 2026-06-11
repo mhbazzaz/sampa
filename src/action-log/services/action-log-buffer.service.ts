@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ActionLogStatusEnum } from 'src/common/enums/action-log.enum';
 import { ActionEnum } from 'src/common/enums/action.enum';
+import { EntityTypeEnum } from 'src/common/enums/entity-type.enum';
 import { ChangelogConfig } from 'src/common/interfaces/change-log-config.interface';
 import { ChangeLog } from 'src/common/interfaces/change-log.interface';
 import { DataSource, In, LessThan, QueryRunner, Repository } from 'typeorm';
@@ -31,7 +32,7 @@ export class ActionLogBufferService {
       assessmentLayerId?: string;
     },
     details: {
-      entityType: 'request' | 'layer' | 'testcase' | 'spec' | 'remediate';
+      entityType: EntityTypeEnum;
       beforeEntity: any;
       updateDto: any;
       userId: string;
@@ -178,6 +179,7 @@ export class ActionLogBufferService {
             pendingChange.beforeEntity,
             pendingChange.updateDto,
             config,
+            pendingChange.entityType,
           );
         allChanges.push(...enrichedChanges);
       }
@@ -269,18 +271,18 @@ export class ActionLogBufferService {
    * Gets the configuration for resolving fields based on entity type.
    */
   private getConfigForEntity(
-    entityType: 'request' | 'layer' | 'testcase' | 'spec' | 'remediate',
+    entityType: EntityTypeEnum,
   ): ChangelogConfig {
     switch (entityType) {
-      case 'request':
+      case EntityTypeEnum.Request:
         return this.changelogConfigFactory.getAssessmentRequestConfig();
-      case 'layer':
+      case EntityTypeEnum.Layer:
         return this.changelogConfigFactory.getAssessmentLayerConfig();
-      case 'testcase':
+      case EntityTypeEnum.Testcase:
         return this.changelogConfigFactory.getTestcaseContentConfig();
-      case 'spec':
+      case EntityTypeEnum.Spec:
         return this.changelogConfigFactory.getRequestSpecContentConfig();
-      case 'remediate':
+      case EntityTypeEnum.Remediate:
         return this.changelogConfigFactory.getTestcaseRemediateConfig();
       default:
         throw new Error(`Unknown entity type: ${entityType}`);
@@ -305,4 +307,4 @@ export class ActionLogBufferService {
     );
     return deletedCount;
   }
-}
+  }

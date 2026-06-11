@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { EntityTypeEnum } from 'src/common/enums/entity-type.enum';
 import { ChangelogConfig } from 'src/common/interfaces/change-log-config.interface';
 import { ChangeLog } from 'src/common/interfaces/change-log.interface';
 import { In, Repository } from 'typeorm';
@@ -10,11 +11,13 @@ export class GenericChangelogService {
     beforeEntity: T,
     updateDto: Partial<T>,
     config: ChangelogConfig,
+    entityType?: EntityTypeEnum,
   ): Promise<ChangeLog[]> {
     const changes = this.buildChangeLog(
       beforeEntity,
       updateDto,
       config.trackedFields,
+      entityType,
     );
     return this.enrichChangesWithDisplayValues(changes, config);
   }
@@ -24,6 +27,7 @@ export class GenericChangelogService {
     beforeEntity: T,
     updateDto: Partial<T>,
     trackedFields: string[],
+    entityType?: EntityTypeEnum,
   ): ChangeLog[] {
     const changes: ChangeLog[] = [];
 
@@ -34,9 +38,12 @@ export class GenericChangelogService {
       if (newVal === undefined || oldVal === newVal) continue;
 
       changes.push({
+        entityType,
         updateData: field,
         oldValue: oldVal,
         newValue: newVal,
+        oldDisplayValue: null,
+        newDisplayValue: null,
       });
     }
 
@@ -76,8 +83,19 @@ export class GenericChangelogService {
         }
         const group = repositoryChanges.get(resolver.repository)!;
         group.changes.push(change);
-        if (change.oldValue) group.ids.add(change.oldValue);
-        if (change.newValue) group.ids.add(change.newValue);
+        
+        // Handle both single values and arrays
+        if (Array.isArray(change.oldValue)) {
+          change.oldValue.forEach((id) => group.ids.add(id));
+        } else if (change.oldValue) {
+          group.ids.add(change.oldValue);
+        }
+        
+        if (Array.isArray(change.newValue)) {
+          change.newValue.forEach((id) => group.ids.add(id));
+        } else if (change.newValue) {
+          group.ids.add(change.newValue);
+        }
       }
 
       if (resolver.type === 'httpUser') {
@@ -97,15 +115,34 @@ export class GenericChangelogService {
           const entityMap = new Map(entities.map((e: any) => [e.id, e]));
 
           for (const change of group.changes) {
-            const oldEntity: any = change.oldValue
-              ? entityMap.get(change.oldValue)
-              : null;
-            const newEntity: any = change.newValue
-              ? entityMap.get(change.newValue)
-              : null;
+            // Handle array values (like environmentIds)
+            if (Array.isArray(change.oldValue)) {
+              change.oldDisplayValue = change.oldValue
+                .map((id) => {
+                  const entity = entityMap.get(id);
+                  return entity?.[group.labelField] ?? null;
+                })
+                .filter(Boolean);
+            } else {
+              const oldEntity: any = change.oldValue
+                ? entityMap.get(change.oldValue)
+                : null;
+              change.oldDisplayValue = oldEntity?.[group.labelField] ?? null;
+            }
 
-            change.oldDisplayValue = oldEntity?.[group.labelField] ?? null;
-            change.newDisplayValue = newEntity?.[group.labelField] ?? null;
+            if (Array.isArray(change.newValue)) {
+              change.newDisplayValue = change.newValue
+                .map((id) => {
+                  const entity = entityMap.get(id);
+                  return entity?.[group.labelField] ?? null;
+                })
+                .filter(Boolean);
+            } else {
+              const newEntity: any = change.newValue
+                ? entityMap.get(change.newValue)
+                : null;
+              change.newDisplayValue = newEntity?.[group.labelField] ?? null;
+            }
           }
         },
       ),

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
 import { ActionLogBufferService } from 'src/action-log/services/action-log-buffer.service';
 import { AssessmentRequestRepository } from 'src/assessment/repositories/assessment-request.repository';
+import { EntityTypeEnum } from 'src/common/enums/entity-type.enum';
 import { ContentStatus } from 'src/common/enums/test-case-content-status.enum';
 import { ContentCriticality } from 'src/common/enums/test-case-criticality.enum';
 import { PaginationDto } from 'src/common/pagination-dto/pagination.dto';
@@ -169,7 +170,7 @@ export class TestcaseContentService {
           assessmentRequestId: beforeEntity.assessmentRequestId,
         },
         {
-          entityType: 'testcase',
+          entityType: EntityTypeEnum.Testcase,
           beforeEntity,
           updateDto: dto,
           userId,

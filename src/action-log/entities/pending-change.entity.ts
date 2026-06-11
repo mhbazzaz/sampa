@@ -1,3 +1,4 @@
+import { EntityTypeEnum } from 'src/common/enums/entity-type.enum';
 import { AbstractEntity } from 'src/database/abstract.entity';
 import { Column, Entity, Index } from 'typeorm';
 
@@ -11,8 +12,8 @@ export class PendingChange extends AbstractEntity<PendingChange> {
   @Column({ type: 'uuid', nullable: true })
   assessmentLayerId: string | null;
 
-  @Column({ type: 'varchar', nullable: false })
-  entityType: 'request' | 'layer' | 'testcase' | 'spec' | 'remediate';
+  @Column({ type: 'enum', enum: EntityTypeEnum, nullable: false })
+  entityType: EntityTypeEnum;
 
   @Column({ type: 'jsonb', nullable: false })
   beforeEntity: any;

@@ -206,7 +206,7 @@ export class ChangelogConfigFactory {
         'description',
         'requestSpecGroupId',
         'assetTypeId',
-        'environmentId',
+        'environmentIds', // Track environment changes as array of IDs
       ],
       fieldResolvers: {
         requestSpecGroupId: {
@@ -219,7 +219,7 @@ export class ChangelogConfigFactory {
           repository: this.assetTypeRepository,
           labelField: 'name',
         },
-        environmentId: {
+        environmentIds: {
           type: 'repository',
           repository: this.environmentRepository,
           labelField: 'name',

@@ -83,7 +83,7 @@ export class AssessmentLayerRepository extends AbstractRepository<AssessmentLaye
 
         const layer = await this.findOne({
           where: { id: element.layerId },
-          // relations: { assessmentRequest: { assessmentLayers: true } },
+          relations: { assessmentRequest: true },
         });
 
         if (!layer) {
@@ -203,8 +203,8 @@ export class AssessmentLayerRepository extends AbstractRepository<AssessmentLaye
             roleIds: memberRoles.map((r) => r.id),
             action: element.action as ActionEnum,
             status: ActionLogStatusEnum.SUCCESS,
-            assessmentRequestCurrentStateId: null,
-            assessmentRequestNextStateId: null,
+            assessmentRequestCurrentStateId: layer.assessmentRequest?.stateId ?? null,
+            assessmentRequestNextStateId: layer.assessmentRequest?.stateId ?? null,
             assessmentLayerCurrentStateId: layerCurrentStateId,
             assessmentLayerNextStateId: stateTransition.id,
           },
@@ -247,6 +247,7 @@ export class AssessmentLayerRepository extends AbstractRepository<AssessmentLaye
             assessmentLayers: { id: data.dataList[0].layerId },
           },
         },
+        relations: { assessmentRequest: true },
       });
 
       let stateTransition: State | undefined;
@@ -375,8 +376,8 @@ export class AssessmentLayerRepository extends AbstractRepository<AssessmentLaye
             roleIds: memberRoles.map((r) => r.id),
             action: ActionEnum.SupervisedAssignAllTeamsAuditors,
             status: ActionLogStatusEnum.SUCCESS,
-            assessmentRequestCurrentStateId: null,
-            assessmentRequestNextStateId: null,
+            assessmentRequestCurrentStateId: layer.assessmentRequest?.stateId ?? null,
+            assessmentRequestNextStateId: layer.assessmentRequest?.stateId ?? null,
             assessmentLayerCurrentStateId: layerCurrentStateId,
             assessmentLayerNextStateId: stateTransition.id,
           },
