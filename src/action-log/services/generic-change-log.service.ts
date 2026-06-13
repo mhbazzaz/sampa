@@ -83,14 +83,13 @@ export class GenericChangelogService {
         }
         const group = repositoryChanges.get(resolver.repository)!;
         group.changes.push(change);
-        
-        // Handle both single values and arrays
+
         if (Array.isArray(change.oldValue)) {
           change.oldValue.forEach((id) => group.ids.add(id));
         } else if (change.oldValue) {
           group.ids.add(change.oldValue);
         }
-        
+
         if (Array.isArray(change.newValue)) {
           change.newValue.forEach((id) => group.ids.add(id));
         } else if (change.newValue) {
@@ -115,7 +114,6 @@ export class GenericChangelogService {
           const entityMap = new Map(entities.map((e: any) => [e.id, e]));
 
           for (const change of group.changes) {
-            // Handle array values (like environmentIds)
             if (Array.isArray(change.oldValue)) {
               change.oldDisplayValue = change.oldValue
                 .map((id) => {

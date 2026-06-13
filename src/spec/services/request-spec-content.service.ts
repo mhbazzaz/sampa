@@ -102,7 +102,7 @@ export class RequestSpecContentService {
       await this.actionLogBufferService.addChange(
         { assessmentRequestId },
         {
-          entityType: EntityTypeEnum.Spec,
+          entityType: EntityTypeEnum.SpecContent,
           beforeEntity: {},
           updateDto: body,
           userId: member.id,
@@ -123,7 +123,7 @@ export class RequestSpecContentService {
       await this.actionLogBufferService.addChange(
         { assessmentRequestId },
         {
-          entityType: EntityTypeEnum.Spec,
+          entityType: EntityTypeEnum.SpecContent,
           beforeEntity: beforeEntity || {},
           updateDto: body,
           userId: member.id,
@@ -190,7 +190,7 @@ export class RequestSpecContentService {
       await this.actionLogBufferService.addChange(
         { assessmentRequestId: layer.assessmentRequestId, assessmentLayerId },
         {
-          entityType: EntityTypeEnum.Spec,
+          entityType: EntityTypeEnum.SpecContent,
           beforeEntity: {},
           updateDto: body,
           userId: member.id,
@@ -214,7 +214,7 @@ export class RequestSpecContentService {
       await this.actionLogBufferService.addChange(
         { assessmentRequestId: layer.assessmentRequestId, assessmentLayerId },
         {
-          entityType: EntityTypeEnum.Spec,
+          entityType: EntityTypeEnum.SpecContent,
           beforeEntity: beforeEntity || {},
           updateDto: body,
           userId: member.id,

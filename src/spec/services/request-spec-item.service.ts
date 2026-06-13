@@ -72,7 +72,6 @@ export class RequestSpecItemService {
   ) {
     const updatePayload: Partial<RequestSpecItem> = {};
 
-    // Fetch current spec item with relations to track changes
     const currentSpec = await this.requestSpecItemRepository.findOne({
       where: data,
       relations: { environments: true },
@@ -86,7 +85,6 @@ export class RequestSpecItemService {
       );
     }
 
-    // Prepare beforeEntity for change tracking
     const beforeEntity: any = {
       id: currentSpec.id,
       value: currentSpec.value,
@@ -99,7 +97,6 @@ export class RequestSpecItemService {
       environmentIds: currentSpec.environments?.map((env) => env.id) || [],
     };
 
-    // Prepare updateDto for change tracking
     const updateDto: any = {
       id: currentSpec.id,
     };
@@ -129,7 +126,6 @@ export class RequestSpecItemService {
               );
             }
             updatePayload['assessmentType'] = assessmentTypes;
-            // Not tracking assessmentType changes in changelog for now
             break;
 
           case 'assetTypeId':
@@ -152,7 +148,6 @@ export class RequestSpecItemService {
             updatePayload['environments'] = (value as string[]).map(
               (v) => new Environment({ id: v }),
             );
-            // Track environment changes as an array of IDs
             updateDto['environmentIds'] = value as string[];
             break;
 
@@ -166,23 +161,23 @@ export class RequestSpecItemService {
       }
     }
 
-    const result = await this.requestSpecItemRepository.update(data, updatePayload);
+    const result = await this.requestSpecItemRepository.update(
+      data,
+      updatePayload,
+    );
 
-    // Log changes if userId is provided and there are changes
-    if (userId && Object.keys(updateDto).length > 1) { // More than just 'id'
-      // Find all assessment requests that use this spec item to log changes
+    if (userId && Object.keys(updateDto).length > 1) {
       const specContents = await this.requestSpecItemRepository.query(
         `SELECT DISTINCT "assessmentRequestId" FROM "request_spec_content" WHERE "requestSpecItemId" = $1`,
-        [currentSpec.id]
+        [currentSpec.id],
       );
 
-      // If spec item is used in any requests, log the change
       if (specContents && specContents.length > 0) {
         for (const content of specContents) {
           await this.actionLogBufferService.addChange(
             { assessmentRequestId: content.assessmentRequestId },
             {
-              entityType: EntityTypeEnum.Spec,
+              entityType: EntityTypeEnum.SpecItem,
               beforeEntity,
               updateDto,
               userId,

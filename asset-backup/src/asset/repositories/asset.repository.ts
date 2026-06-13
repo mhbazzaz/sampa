@@ -4,8 +4,9 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import axios from 'axios';
+import axios, { AxiosRequestConfig } from 'axios';
 import { Request } from 'express';
+import { appendFile } from 'fs/promises';
 import { I18nService } from 'nestjs-i18n';
 import * as requestIp from 'request-ip';
 import { ActionLogRepository } from 'src/action-log/repositories/action-log.repository';
@@ -17,6 +18,9 @@ import {
   ActionLogStatusEnum,
   UserActionEnum,
 } from 'src/common/enums/action-log.enum';
+import { AssetTypeClassificationEnum } from 'src/common/enums/asset-type-classification.enum';
+import { storeFailedCurlRequest } from 'src/common/helpers/store-failed-curl-request';
+import { IDPUser } from 'src/common/interfaces/idp-user';
 import { ValidationService } from 'src/common/validations/schema-validation.service';
 import { AbstractRepository } from 'src/database/abstract.repository';
 import { LocationRepository } from 'src/location/repositories/location.repository';
@@ -200,7 +204,7 @@ export class AssetRepository extends AbstractRepository<Asset> {
       assetRelationType: AssetRelationType | undefined;
     }[],
     assetTypeVersion: AssetTypeVersion,
-    user: User,
+    user: IDPUser,
   ) {
     const {
       content,
@@ -326,7 +330,7 @@ export class AssetRepository extends AbstractRepository<Asset> {
 
       try {
         await ElasticsearchClient.instance.client.index({
-          index: 'assets',
+          index: assetTypeVersion.id,
           id: createdAssetVersion.id,
           refresh: true,
           body: {
@@ -346,9 +350,6 @@ export class AssetRepository extends AbstractRepository<Asset> {
             content: undefined,
           },
         });
-        // await ElasticsearchClient.instance.client.indices.refresh({
-        //   index: 'assets',
-        // });
       } catch (error) {
         console.log(error);
       }
@@ -488,8 +489,9 @@ export class AssetRepository extends AbstractRepository<Asset> {
 
       try {
         await ElasticsearchClient.instance.client.index({
-          index: 'assets',
+          index: assetTypeVersion.id,
           id: createdAssetVersion.id,
+          refresh: true,
           body: {
             ...content,
             referenceId: refId,
@@ -506,9 +508,6 @@ export class AssetRepository extends AbstractRepository<Asset> {
             archived: false,
             content: undefined,
           },
-        });
-        await ElasticsearchClient.instance.client.indices.refresh({
-          index: 'assets',
         });
       } catch (error) {
         console.log(error);
@@ -542,7 +541,7 @@ export class AssetRepository extends AbstractRepository<Asset> {
   async updateTransaction(
     data: FindOptionsWhere<Asset>,
     updateAsset: UpdateAssetDto,
-    user: User,
+    user: IDPUser,
     userRoles: Role[],
     req: Request,
   ) {
@@ -564,13 +563,20 @@ export class AssetRepository extends AbstractRepository<Asset> {
       order: { createdAt: 'DESC' },
     });
 
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
     const assetId = oldAssetVersion?.assetId;
     if (!assetId) {
       throw new BadRequestException('Asset id is required for update');
     }
+
+    if (
+      oldAssetVersion.assetTypeVersion?.classification ===
+      AssetTypeClassificationEnum.LogSource
+    ) {
+      updateAsset.externalRefId = undefined;
+    }
+
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
     try {
       const {
@@ -899,7 +905,7 @@ export class AssetRepository extends AbstractRepository<Asset> {
 
         try {
           await ElasticsearchClient.instance.client.index({
-            index: 'assets',
+            index: newAssetVersion.assetTypeVersionId,
             id: newAssetVersion.id,
             body: {
               ...(content ? content : JSON.parse(oldAssetVersion.content)),
@@ -920,7 +926,7 @@ export class AssetRepository extends AbstractRepository<Asset> {
             },
           });
           await ElasticsearchClient.instance.client.update({
-            index: 'assets',
+            index: oldAssetVersion.assetTypeVersionId,
             id: oldAssetVersion.id,
             doc: {
               archived: true,
@@ -1162,6 +1168,62 @@ export class AssetRepository extends AbstractRepository<Asset> {
           await queryRunner.manager.save(AssetRelation, newRelations);
         }
         //finished relation without other fields
+
+        if (
+          oldAssetVersion.assetTypeVersion?.classification ===
+          AssetTypeClassificationEnum.LogSource
+        ) {
+          const { content } = updateAsset as {
+            content: {
+              HostName: string;
+              IPAddress: string;
+              Type: { ID: number; Name: string };
+              ProtocolType: { ID: number; Name: string };
+              QradarGroup: { ID: number; Name: string };
+              Status: string;
+            };
+          };
+
+          const LSW_TOKEN = await Vault.instance.get('LSW_TOKEN');
+          const LSW_URL = await Vault.instance.get('LSW_URL');
+
+          const url = `${LSW_URL}/log-source/${oldAssetVersion.asset.externalRefId}`;
+          const payload = {
+            log_source_type_id: content.Type.ID,
+            protocol_type_id: content.ProtocolType.ID,
+            ip: content.IPAddress,
+            hostname: content.HostName,
+            group_ids: [content.QradarGroup.ID],
+          };
+          const config: AxiosRequestConfig = {
+            headers: {
+              'X-Server-Auth-Key': LSW_TOKEN,
+              'X-Server-Username': user.username,
+            },
+          };
+
+          try {
+            await axios.put(url, payload, config);
+          } catch (error) {
+            const curlCommand = storeFailedCurlRequest(
+              url,
+              'PUT',
+              payload,
+              config.headers,
+              error,
+            );
+
+            const timestamp = new Date().toISOString().replace(/:/g, '-');
+
+            await appendFile(
+              'failed_requests.log',
+              `\n--- FAILED REQUEST ${timestamp} ---\n${curlCommand}\n`,
+            );
+
+            throw error;
+          }
+        }
+
         await queryRunner.commitTransaction();
         logStatus = ActionLogStatusEnum.SUCCESS;
 

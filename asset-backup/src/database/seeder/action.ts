@@ -46,6 +46,11 @@ const actions: {
     tier: ActionTierEnum.BACKEND,
     processName: ProcessEnum.AssetManagement,
   },
+  {
+    name: ActionEnum.UpdateLogSourceState,
+    tier: ActionTierEnum.BACKEND,
+    processName: ProcessEnum.AssetManagement,
+  },
 ];
 
 export const ActionSeeder = async (datasource: DataSource) => {

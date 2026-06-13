@@ -34,10 +34,12 @@ import { InternalCommunicationGuard } from 'src/common/guards/internal-communica
 import { UserGuard } from 'src/common/guards/user.guard';
 import { responseGenerator } from 'src/common/helpers/response-generator';
 import { ModifyPatchRequestBodyInterceptors } from 'src/common/interceptors/modify-patch-request-body.interceptor';
+import { IDPUser } from 'src/common/interfaces/idp-user';
 import { PaginationDto } from 'src/common/pagination-dto/pagination.dto';
 import { Role } from 'src/role/entities/role.entity';
 import { User } from 'src/users/entities/user.entity';
 import { assetBodyReportJsonDto } from '../dto/input/asset-body-report-json.dto';
+import { AssetChangeStatusDto } from '../dto/input/asset-change-status.dto';
 import { assetSearchBodyReportExportExcelDto } from '../dto/input/asset-search-body-report-export-excel.dto';
 import { assetSearchBodyReportDto } from '../dto/input/asset-search-body-report.dto';
 import { CreateAssetDto } from '../dto/input/create-asset.dto';
@@ -66,7 +68,7 @@ export class AssetController {
   @Process(ProcessEnum.AssetManagement)
   @Post('asset')
   async create(
-    @CurrentUser() user: User,
+    @CurrentUser() user: IDPUser,
     @CurrentUserRoles() userRoles: Role[],
     @Body() data: CreateAssetDto,
     @Req() req: Request,
@@ -161,7 +163,7 @@ export class AssetController {
   @Get('asset/log-source-groups')
   async getLogSourceGroups(
     @Query() query: GetLogSourceGroupsDTO,
-    @CurrentUser() user: User,
+    @CurrentUser() user: IDPUser,
   ): Promise<GetAssetDto> {
     const result = await this.assetService.getLogSourceGroups(query, user);
     return responseGenerator({
@@ -181,7 +183,7 @@ export class AssetController {
   @Get('asset/log-source/types')
   async getLogSourceTypes(
     @Query() query: GetLogSourceTypeDTO,
-    @CurrentUser() user: User,
+    @CurrentUser() user: IDPUser,
   ): Promise<GetAssetDto> {
     const result = await this.assetService.getLogSourceTypes(query, user);
     return responseGenerator({
@@ -202,7 +204,7 @@ export class AssetController {
   async getLogSourceProtocols(
     @Query() query: GetLogSourceTypeDTO,
     @Param('typeId') typeId: string,
-    @CurrentUser() user: User,
+    @CurrentUser() user: IDPUser,
   ): Promise<GetAssetDto> {
     const result = await this.assetService.getLogSourceProtocols(
       query,
@@ -357,26 +359,26 @@ export class AssetController {
   }
 
   //------------------------------
-  @ApiTags('Asset')
-  @ApiOperation({ summary: 'Asset fields auto complete' })
-  @UseGuards(AuthorizationGuard)
-  @UseGuards(UserGuard)
-  @Action(ActionEnum.Read)
-  @Process(ProcessEnum.AssetManagement)
-  @ApiCreatedResponse({
-    type: GetAssetDto,
-  })
-  @Post('asset/search/auto-complete')
-  async autoComplete(
-    @Body() body: Record<string, Record<string, object | string> | string>,
-  ) {
-    const result = await this.assetService.autoComplete(body);
-    return responseGenerator({
-      statusCode: 200,
-      message: 'successful',
-      data: result,
-    });
-  }
+  // @ApiTags('Asset')
+  // @ApiOperation({ summary: 'Asset fields auto complete' })
+  // @UseGuards(AuthorizationGuard)
+  // @UseGuards(UserGuard)
+  // @Action(ActionEnum.Read)
+  // @Process(ProcessEnum.AssetManagement)
+  // @ApiCreatedResponse({
+  //   type: GetAssetDto,
+  // })
+  // @Post('asset/search/auto-complete')
+  // async autoComplete(
+  //   @Body() body: Record<string, Record<string, object | string> | string>,
+  // ) {
+  //   const result = await this.assetService.autoComplete(body);
+  //   return responseGenerator({
+  //     statusCode: 200,
+  //     message: 'successful',
+  //     data: result,
+  //   });
+  // }
 
   //------------------------------
   @ApiTags('Asset')
@@ -540,7 +542,7 @@ export class AssetController {
   async update(
     @Param('id') id: string,
     @Body() data: UpdateAssetDto,
-    @CurrentUser() user: User,
+    @CurrentUser() user: IDPUser,
     @CurrentUserRoles() userRoles: Role[],
     @Req() req: Request,
   ) {
@@ -684,5 +686,40 @@ export class AssetController {
       message: 'successful',
       data: result,
     });
+  }
+
+  //------------------------------
+  @ApiTags('Asset')
+  @ApiOperation({ summary: 'Get All Asset With Filter' })
+  @UseGuards(AuthorizationGuard)
+  @UseGuards(UserGuard)
+  @Action(ActionEnum.UpdateLogSourceState)
+  @Process(ProcessEnum.AssetManagement)
+  @ApiCreatedResponse({
+    type: GetAssetDto,
+  })
+  @Get('asset/log-sources')
+  async findAllLogSources(@Query() query: FindAllAssetQueryDto) {
+    const result = await this.assetService.findAllLogSources(query);
+    return responseGenerator({
+      statusCode: 200,
+      message: 'successful',
+      data: { data: result.data, count: result.count },
+    });
+  }
+
+  //------------------------------
+  @ApiTags('Asset')
+  @UseGuards(UserGuard, AuthorizationGuard)
+  @Action(ActionEnum.UpdateLogSourceState)
+  @Process(ProcessEnum.AssetManagement)
+  @HttpCode(200)
+  @Post('asset/:id/change-status')
+  async changeAssetStatus(
+    @Body() body: AssetChangeStatusDto,
+    @Param('id') id: string,
+    @CurrentUser() user: IDPUser,
+  ) {
+    return this.assetService.changeAssetStatus(body, id, user);
   }
 }

@@ -25,7 +25,7 @@ export class UpdateAssetDto extends PartialType(CreateAssetDto) {
   editorId?: string;
 
   @ValidateIf((_, value) => value || value === null)
-  externalRefId: string;
+  externalRefId?: string;
 
   @ValidateIf((_, value) => value || value === null)
   editorUnitId: string;

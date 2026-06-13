@@ -250,7 +250,6 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
       }
     }
 
-    // Cursor pagination: updatedAt + tie-breaker id
     if (requestLastUpdatedAt && lastId) {
       qb.andWhere(
         '(request.updatedAt < :updatedAt OR (request.updatedAt = :updatedAt AND request.id < :lastId))',
@@ -261,7 +260,6 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
       );
     }
 
-    // Ordering + limit
     qb.orderBy('request.updatedAt', 'DESC')
       .addOrderBy('request.id', 'DESC')
       .take(20);
@@ -413,7 +411,6 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
 
   //------------------------------
   async getAssessmentReports(filters: AssessmentReportFilterDto) {
-    // Build subquery to apply filters on requests and layers
     const requestSubQuery = this.assessmentRequestRepository
       .createQueryBuilder('request')
       .select('request.id')
@@ -523,14 +520,13 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
       hasRequestFilters = true;
     }
 
-    // Get filtered request IDs
     const filteredRequests = hasRequestFilters
       ? await requestSubQuery.getMany()
       : [];
     const filteredRequestIds = filteredRequests.map((req: any) => req.id);
 
-    // Build main query starting from assets
-    const assetRepository = this.assessmentRequestRepository.manager.getRepository('AssetToAudit');
+    const assetRepository =
+      this.assessmentRequestRepository.manager.getRepository('AssetToAudit');
     const assetQuery = assetRepository
       .createQueryBuilder('asset')
       .leftJoinAndSelect('asset.assetType', 'assetType')
@@ -540,7 +536,6 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
       .leftJoinAndSelect('layer.assessmentType', 'assessmentType')
       .leftJoinAndSelect('layer.state', 'layerState');
 
-    // Apply asset filters
     if (filters.assetReferenceId) {
       assetQuery.andWhere('asset.referenceId = :assetReferenceId', {
         assetReferenceId: filters.assetReferenceId,
@@ -559,13 +554,11 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
       });
     }
 
-    // Filter assets that have matching requests
     if (hasRequestFilters && filteredRequestIds.length > 0) {
       assetQuery.andWhere('request.id IN (:...filteredRequestIds)', {
         filteredRequestIds,
       });
     } else if (hasRequestFilters && filteredRequestIds.length === 0) {
-      // No matching requests found, return empty result
       return {
         data: [],
         total: 0,
@@ -579,21 +572,17 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
 
     const [data, total] = await assetQuery.getManyAndCount();
 
-    // Transform data to include assessment information
     const transformedData = data.map((asset: any) => {
       const requests = asset.assessmentRequests || [];
 
-      // Filter requests based on the applied filters
       const filteredAssetRequests =
         hasRequestFilters && filteredRequestIds.length > 0
           ? requests.filter((req: any) => filteredRequestIds.includes(req.id))
           : requests;
 
-      // Calculate totals for each request
       const requestsWithTotals = filteredAssetRequests.map((request: any) => {
         const layers = request.assessmentLayers || [];
 
-        // Apply layer filters if specified
         let filteredLayers = layers;
         if (filters.layerStateIds && filters.layerStateIds.length) {
           filteredLayers = layers.filter((layer: any) =>
@@ -618,7 +607,8 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
         ) {
           filteredLayers = filteredLayers.filter(
             (layer: any) =>
-              layer.highVulnerabilitiesCount >= (filters.hasHighVulnerabilities as number),
+              layer.highVulnerabilitiesCount >=
+              (filters.hasHighVulnerabilities as number),
           );
         }
 
@@ -639,27 +629,32 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
         ) {
           filteredLayers = filteredLayers.filter(
             (layer: any) =>
-              layer.lowVulnerabilitiesCount >= (filters.hasLowVulnerabilities as number),
+              layer.lowVulnerabilitiesCount >=
+              (filters.hasLowVulnerabilities as number),
           );
         }
 
         const totalCriticalVulnerabilities = filteredLayers.reduce(
-          (sum: number, layer: any) => sum + (layer.criticalVulnerabilitiesCount || 0),
+          (sum: number, layer: any) =>
+            sum + (layer.criticalVulnerabilitiesCount || 0),
           0,
         );
 
         const totalHighVulnerabilities = filteredLayers.reduce(
-          (sum: number, layer: any) => sum + (layer.highVulnerabilitiesCount || 0),
+          (sum: number, layer: any) =>
+            sum + (layer.highVulnerabilitiesCount || 0),
           0,
         );
 
         const totalMediumVulnerabilities = filteredLayers.reduce(
-          (sum: number, layer: any) => sum + (layer.mediumVulnerabilitiesCount || 0),
+          (sum: number, layer: any) =>
+            sum + (layer.mediumVulnerabilitiesCount || 0),
           0,
         );
 
         const totalLowVulnerabilities = filteredLayers.reduce(
-          (sum: number, layer: any) => sum + (layer.lowVulnerabilitiesCount || 0),
+          (sum: number, layer: any) =>
+            sum + (layer.lowVulnerabilitiesCount || 0),
           0,
         );
 
@@ -673,9 +668,9 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
         };
       });
 
-      // Calculate asset-level totals
       const assetTotalCritical = requestsWithTotals.reduce(
-        (sum: number, req: any) => sum + (req.totalCriticalVulnerabilities || 0),
+        (sum: number, req: any) =>
+          sum + (req.totalCriticalVulnerabilities || 0),
         0,
       );
       const assetTotalHigh = requestsWithTotals.reduce(

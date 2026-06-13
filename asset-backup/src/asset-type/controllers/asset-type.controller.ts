@@ -258,6 +258,26 @@ export class AssetTypeController {
   @Action(ActionEnum.Read)
   @Process(ProcessEnum.AssetManagement)
   @ApiTags('Asset-Type')
+  @Get('asset-type/log-source/versions')
+  async findLogSourceAssetTypeVersions(
+    @Query() query: GetAssetTypeVersionUserPaginationDto,
+  ) {
+    const data =
+      await this.assetTypeService.findLogSourceAssetTypeVersions(query);
+    return responseGenerator({
+      statusCode: 200,
+      message: 'successful',
+      data: { data: data[0], count: data[1] },
+    });
+  }
+
+  //------------------------------
+  @ApiOperation({ summary: 'Get One Asset Type' })
+  @UseGuards(AuthorizationGuard)
+  @UseGuards(UserGuard)
+  @Action(ActionEnum.Read)
+  @Process(ProcessEnum.AssetManagement)
+  @ApiTags('Asset-Type')
   @Get('asset-type/:id/versions')
   async findOneAssetTypeVersionByIdUserScope(
     @Param('id') assetTypeId: string,

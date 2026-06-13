@@ -3,4 +3,5 @@ export enum AssetRoles {
   AssetUser = 'asset user',
   AssetSupervisor = 'asset supervisor',
   AssetAuditor = 'asset auditor',
+  LSWAdmin = 'lsw admin',
 }

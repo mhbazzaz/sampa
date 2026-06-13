@@ -489,8 +489,10 @@ export class AssessmentLayerService {
           roleIds: memberRoles.map((r) => r.id),
           action: ActionEnum.PendingLayerTestcasesSubmit,
           status: ActionLogStatusEnum.SUCCESS,
-          assessmentRequestCurrentStateId: layer.assessmentRequest?.stateId ?? null,
-          assessmentRequestNextStateId: layer.assessmentRequest?.stateId ?? null,
+          assessmentRequestCurrentStateId:
+            layer.assessmentRequest?.stateId ?? null,
+          assessmentRequestNextStateId:
+            layer.assessmentRequest?.stateId ?? null,
           assessmentLayerCurrentStateId: layerCurrentStateId,
           assessmentLayerNextStateId: stateTransition.id,
         },

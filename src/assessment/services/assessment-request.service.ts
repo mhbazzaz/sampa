@@ -5,9 +5,8 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { I18nService } from 'nestjs-i18n';
 import axios from 'axios';
-import { Vault } from 'src/common/vault';
+import { I18nService } from 'nestjs-i18n';
 import { ActionLogRepository } from 'src/action-log/repositories/action-log.repository';
 import { ActionLogBufferService } from 'src/action-log/services/action-log-buffer.service';
 import { ChangelogConfigFactory } from 'src/action-log/services/change-log-configs';
@@ -36,6 +35,7 @@ import { StateTransitionService } from 'src/state-transition/services/state-tran
 import { State } from 'src/states/entities/state.entity';
 import { StatesRepository } from 'src/states/repositories/state.repository';
 import { StatesService } from 'src/states/services/states.service';
+import { Vault } from 'src/vault/vault';
 import {
   DataSource,
   DeepPartial,
@@ -475,7 +475,7 @@ export class AssessmentRequestService {
             layerCurrentStateId: layer.stateId,
             layerNextStateId: stateTransition.id,
             requestCurrentStateId: requestCurrentStateId,
-            requestNextStateId: requestCurrentStateId, // Request state hasn't changed yet at this point
+            requestNextStateId: requestCurrentStateId,
           });
 
           anyLayerUpdated = true;
@@ -1273,42 +1273,89 @@ export class AssessmentRequestService {
 
   //------------------------------
   async getAssessmentReports(filters: AssessmentReportFilterDto) {
-    // Convert applicant employee IDs to user IDs via IDP API
-    if (filters.applicantEmployeeIds && filters.applicantEmployeeIds.length > 0) {
-      try {
-        const IDP_SERVICE_INTERNAL_TOKEN = await Vault.instance.get(
-          'IDP_SERVICE_INTERNAL_TOKEN',
-          'share',
-        );
-        const IDP_SERVICE_URL = await Vault.instance.get('IDP_SERVICE_URL');
+    try {
+      const IDP_SERVICE_INTERNAL_TOKEN = await Vault.instance.get(
+        'IDP_SERVICE_INTERNAL_TOKEN',
+        'share',
+      );
+      const IDP_SERVICE_URL = await Vault.instance.get('IDP_SERVICE_URL');
 
-        const userIdPromises = filters.applicantEmployeeIds.map(async (employeeId) => {
-          try {
-            const { data } = await axios.post(
-              `${IDP_SERVICE_URL}/idp/api/v1/users`,
-              {
-                domain: 'iranet',
-                employeeId: employeeId,
-              },
-              {
-                headers: {
-                  'x-internal-communication-token': IDP_SERVICE_INTERNAL_TOKEN,
+      const hasEmployeeFilter =
+        !!filters.employeeId ||
+        !!filters.departmentId ||
+        !!filters.groupId ||
+        !!filters.managementId;
+
+      const { data } = await axios.get(
+        `${IDP_SERVICE_URL}/idp/api/v1/auth/get-all-employees-internal-without-paginate`,
+        {
+          params: {
+            EmployeeId: filters.employeeId,
+            DepartmentId: filters.departmentId,
+            GroupId: filters.groupId,
+            ManagementId: filters.managementId,
+            GetInternalUsers: true,
+          },
+          headers: {
+            'x-internal-communication-token': IDP_SERVICE_INTERNAL_TOKEN,
+            accept: '*/*',
+          },
+        },
+      );
+
+      const employees = data?.data ?? [];
+
+      const employeeIds = employees
+        .map((employee: any) => employee.EmployeeId)
+        .filter(Boolean);
+
+      if (employeeIds.length > 0) {
+        const userIds = await Promise.all(
+          employeeIds.map(async (employeeId: string) => {
+            try {
+              const { data } = await axios.post(
+                `${IDP_SERVICE_URL}/idp/api/v1/users`,
+                {
+                  domain: 'iranet',
+                  employeeId,
                 },
-              },
-            );
-            return data.data.id;
-          } catch (error) {
-            return null;
-          }
-        });
+                {
+                  headers: {
+                    'x-internal-communication-token':
+                      IDP_SERVICE_INTERNAL_TOKEN,
+                  },
+                },
+              );
 
-        const userIds = await Promise.all(userIdPromises);
-        filters.applicantIds = userIds.filter((id) => id !== null) as string[];
-      } catch (error) {
-        throw new InternalServerErrorException(
-          'Failed to convert employee IDs to user IDs',
+              return data.data.id ?? null;
+            } catch {
+              return null;
+            }
+          }),
         );
+
+        const applicantIds = [
+          ...new Set(userIds.filter((id): id is string => !!id)),
+        ];
+
+        filters.applicantIds = applicantIds;
       }
+
+      if (
+        hasEmployeeFilter &&
+        (!filters.applicantIds || filters.applicantIds.length === 0)
+      ) {
+        return {
+          data: [],
+          total: 0,
+        };
+      }
+    } catch (error) {
+      console.log(error.message);
+
+      throw new InternalServerErrorException(
+        'Failed to resolve applicant user IDs',
+      );
     }
 
     return this.assessmentRequestRepository.getAssessmentReports(filters);

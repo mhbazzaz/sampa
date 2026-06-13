@@ -199,7 +199,7 @@ export class TestcaseContentController {
     });
   }
 
-  //----------------------------------
+  //------------------------------
   @ApiTags('Admin / Test-Case-Content')
   @ApiOperation({ summary: 'Remove Test-Case Content By Id' })
   @ApiCreatedResponse({
@@ -211,7 +211,7 @@ export class TestcaseContentController {
     return await this.testcaseContentService.remove(id);
   }
 
-  //----------------------------------
+  //------------------------------
   @ApiTags('Test-Case-Content')
   @ApiOperation({ summary: 'Remove Test-Case Content By Id' })
   @ApiCreatedResponse({

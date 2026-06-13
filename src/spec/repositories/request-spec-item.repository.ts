@@ -23,6 +23,11 @@ export class RequestSpecItemRepository extends AbstractRepository<RequestSpecIte
   }
 
   //------------------------------
+  async query(sql: string, parameters?: any[]): Promise<any> {
+    return this.dataSource.query(sql, parameters);
+  }
+
+  //------------------------------
   async findFilteredRequestSpecItems(
     query: FindFilteredRequestSpecItemQueryDto,
   ): Promise<[RequestSpecItem[], number]> {

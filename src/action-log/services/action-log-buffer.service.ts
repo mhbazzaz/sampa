@@ -23,9 +23,6 @@ export class ActionLogBufferService {
     private changelogConfigFactory: ChangelogConfigFactory,
   ) {}
 
-  /**
-   * Adds a change to the pending_changes table to be flushed later.
-   */
   async addChange(
     key: {
       assessmentRequestId: string;
@@ -73,9 +70,6 @@ export class ActionLogBufferService {
     }
   }
 
-  /**
-   * Retrieves pending changes for a specific request and layer.
-   */
   private async getPendingChanges(
     key: {
       assessmentRequestId: string;
@@ -95,7 +89,7 @@ export class ActionLogBufferService {
       if (key.assessmentLayerId) {
         whereClause.assessmentLayerId = key.assessmentLayerId;
       } else {
-        whereClause.assessmentLayerId = null; // using null is sufficient for TypeORM in most cases, or IsNull()
+        whereClause.assessmentLayerId = null;
       }
 
       const pendingChanges = await pendingChangeRepo.find({
@@ -116,10 +110,6 @@ export class ActionLogBufferService {
     }
   }
 
-  /**
-   * Flushes all pending changes for a given key to an ActionLog record.
-   * Can optionally accept a QueryRunner for transaction management.
-   */
   async flushToActionLog(
     key: {
       assessmentRequestId: string;
@@ -138,7 +128,8 @@ export class ActionLogBufferService {
     },
     externalQueryRunner?: QueryRunner,
   ): Promise<ActionLog> {
-    const queryRunner = externalQueryRunner || this.dataSource.createQueryRunner();
+    const queryRunner =
+      externalQueryRunner || this.dataSource.createQueryRunner();
     const shouldManageTransaction = !externalQueryRunner;
 
     try {
@@ -163,7 +154,7 @@ export class ActionLogBufferService {
             assessmentLayerId: key.assessmentLayerId || null,
             changes: undefined,
           });
-        
+
         if (shouldManageTransaction) {
           await queryRunner.commitTransaction();
         }
@@ -204,7 +195,7 @@ export class ActionLogBufferService {
       this.logger.log(
         `Flushed ${pendingChanges.length} pending changes to ActionLog ${actionLog.id}`,
       );
-      
+
       if (shouldManageTransaction) {
         await queryRunner.commitTransaction();
       }
@@ -267,12 +258,7 @@ export class ActionLogBufferService {
     };
   }
 
-  /**
-   * Gets the configuration for resolving fields based on entity type.
-   */
-  private getConfigForEntity(
-    entityType: EntityTypeEnum,
-  ): ChangelogConfig {
+  private getConfigForEntity(entityType: EntityTypeEnum): ChangelogConfig {
     switch (entityType) {
       case EntityTypeEnum.Request:
         return this.changelogConfigFactory.getAssessmentRequestConfig();
@@ -280,8 +266,10 @@ export class ActionLogBufferService {
         return this.changelogConfigFactory.getAssessmentLayerConfig();
       case EntityTypeEnum.Testcase:
         return this.changelogConfigFactory.getTestcaseContentConfig();
-      case EntityTypeEnum.Spec:
+      case EntityTypeEnum.SpecContent:
         return this.changelogConfigFactory.getRequestSpecContentConfig();
+      case EntityTypeEnum.SpecItem:
+        return this.changelogConfigFactory.getRequestSpecItemConfig();
       case EntityTypeEnum.Remediate:
         return this.changelogConfigFactory.getTestcaseRemediateConfig();
       default:
@@ -289,9 +277,6 @@ export class ActionLogBufferService {
     }
   }
 
-  /**
-   * Cleans up old flushed pending changes.
-   */
   async cleanupFlushedChanges(olderThanDays: number = 7): Promise<number> {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
@@ -307,4 +292,4 @@ export class ActionLogBufferService {
     );
     return deletedCount;
   }
-  }
+}

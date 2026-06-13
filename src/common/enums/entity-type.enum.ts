@@ -2,6 +2,7 @@ export enum EntityTypeEnum {
   Request = 'request',
   Layer = 'layer',
   Testcase = 'testcase',
-  Spec = 'spec',
+  SpecContent = 'specContent',
+  SpecItem = 'specItem',
   Remediate = 'remediate',
 }

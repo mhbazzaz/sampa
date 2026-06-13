@@ -152,7 +152,6 @@ describe('TestcaseContentService', () => {
     it('should update testcase content when setting status to "accepted" without criticality', async () => {
       const updateDto: UpdateTestcaseContentDto = {
         status: ContentStatus.Accepted,
-        // no criticality → valid
       };
 
       repository.update.mockResolvedValue({ affected: 1 } as any);
@@ -172,7 +171,7 @@ describe('TestcaseContentService', () => {
     it('should throw BadRequestException when updating status to "accepted" but criticality is provided', async () => {
       const updateDto: UpdateTestcaseContentDto = {
         status: ContentStatus.Accepted,
-        criticality: ContentCriticality.Medium, // ❌ not allowed
+        criticality: ContentCriticality.Medium,
       };
 
       await expect(service.update({ id: '1' }, updateDto)).rejects.toThrow(
@@ -184,7 +183,6 @@ describe('TestcaseContentService', () => {
     it('should throw BadRequestException when updating status to "failed" without criticality', async () => {
       const updateDto: UpdateTestcaseContentDto = {
         status: ContentStatus.Failed,
-        // criticality missing → ❌
       };
 
       await expect(service.update({ id: '1' }, updateDto)).rejects.toThrow(
@@ -193,7 +191,6 @@ describe('TestcaseContentService', () => {
       expect(repository.update).not.toHaveBeenCalled();
     });
 
-    // Keep your original generic update test if needed (but it's not realistic)
     it('should allow unrelated updates (e.g., userId) without status/criticality', async () => {
       const updateData = { userId: '9867' } as Partial<TestcaseContent>;
       repository.update.mockResolvedValue({ affected: 1 } as any);

@@ -128,6 +128,12 @@ const roles: {
     category: CategoryEnum.INTERNAL,
     supervisorName: 'ciso',
   },
+  {
+    id: '2a640473-3733-47a4-9d71-bb5bfaf8d331',
+    name: AssetRoles.LSWAdmin,
+    nameFa: 'مدیر لاگ سورس',
+    category: CategoryEnum.INTERNAL,
+  },
 ];
 
 export const RoleSeeder = async (datasource: DataSource) => {

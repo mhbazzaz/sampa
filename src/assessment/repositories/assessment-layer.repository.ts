@@ -203,8 +203,10 @@ export class AssessmentLayerRepository extends AbstractRepository<AssessmentLaye
             roleIds: memberRoles.map((r) => r.id),
             action: element.action as ActionEnum,
             status: ActionLogStatusEnum.SUCCESS,
-            assessmentRequestCurrentStateId: layer.assessmentRequest?.stateId ?? null,
-            assessmentRequestNextStateId: layer.assessmentRequest?.stateId ?? null,
+            assessmentRequestCurrentStateId:
+              layer.assessmentRequest?.stateId ?? null,
+            assessmentRequestNextStateId:
+              layer.assessmentRequest?.stateId ?? null,
             assessmentLayerCurrentStateId: layerCurrentStateId,
             assessmentLayerNextStateId: stateTransition.id,
           },
@@ -376,8 +378,10 @@ export class AssessmentLayerRepository extends AbstractRepository<AssessmentLaye
             roleIds: memberRoles.map((r) => r.id),
             action: ActionEnum.SupervisedAssignAllTeamsAuditors,
             status: ActionLogStatusEnum.SUCCESS,
-            assessmentRequestCurrentStateId: layer.assessmentRequest?.stateId ?? null,
-            assessmentRequestNextStateId: layer.assessmentRequest?.stateId ?? null,
+            assessmentRequestCurrentStateId:
+              layer.assessmentRequest?.stateId ?? null,
+            assessmentRequestNextStateId:
+              layer.assessmentRequest?.stateId ?? null,
             assessmentLayerCurrentStateId: layerCurrentStateId,
             assessmentLayerNextStateId: stateTransition.id,
           },
@@ -394,7 +398,6 @@ export class AssessmentLayerRepository extends AbstractRepository<AssessmentLaye
       // });
 
       let allUpdated = true;
-      // console.log(otherLayers);
 
       for (let index = 0; index < layers.length; index++) {
         const layer = layers[index];

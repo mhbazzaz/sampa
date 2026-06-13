@@ -83,7 +83,7 @@ export class GroupService {
       assetTypeId,
     );
 
-    return createdGroup; // return result in json with key-name createdMembership
+    return createdGroup;
   }
 
   //------------------------------

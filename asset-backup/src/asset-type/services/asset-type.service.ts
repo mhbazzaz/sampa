@@ -4,11 +4,13 @@ import * as fs from 'fs';
 import { I18nService } from 'nestjs-i18n';
 import { extname, join } from 'path';
 import { AssetRelationTypeRepository } from 'src/asset-relation-type/repositories/asset-relation-type.repository';
+import { AssetTypeClassificationEnum } from 'src/common/enums/asset-type-classification.enum';
 import {
   RelationDirection,
   RelationDirectionType,
 } from 'src/common/enums/relation-direction.enum';
 import { allowedIconMimeTypes } from 'src/common/multer-configs/allowed-icon';
+import { PaginationDto } from 'src/common/pagination-dto/pagination.dto';
 import { Filter } from 'src/filter/entities/filter.entity';
 import { FilterRepository } from 'src/filter/repositories/filter.repository';
 import { FilterService } from 'src/filter/services/filter.service';
@@ -1145,5 +1147,24 @@ export class AssetTypeService {
         });
       }
     });
+  }
+
+  //------------------------------
+  async findLogSourceAssetTypeVersions(query: PaginationDto) {
+    return this.assetTypeVersionRepository.findAllPagination(
+      query.skip,
+      query.take,
+      {
+        where: {
+          assetType: {
+            assetTypeVersions: {
+              archived: false,
+              classification: AssetTypeClassificationEnum.LogSource,
+            },
+          },
+        },
+        order: { createdAt: 'DESC' },
+      },
+    );
   }
 }

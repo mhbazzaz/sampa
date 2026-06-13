@@ -8,7 +8,7 @@ import * as path from 'path';
       fallbackLanguage: 'fa',
       loaderOptions: {
         path: path.join(__dirname, '../../src/i18n/locales/'),
-        watch: true, // enable auto-reload in development
+        watch: true,
       },
       resolvers: [
         { use: QueryResolver, options: ['lang', 'locale'] },

@@ -6,4 +6,5 @@ export enum ActionEnum {
   Edit = 'edit',
   Delete = 'delete',
   GetReport = 'get report',
+  UpdateLogSourceState = 'update log source state',
 }

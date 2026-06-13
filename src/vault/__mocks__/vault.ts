@@ -14,8 +14,6 @@ export class Vault {
     return Vault.#instance;
   }
 
-  // login = jest.fn().mockImplementation();
-  // get = jest.fn().mockImplementation();
   login = jest.fn().mockResolvedValue(undefined);
   get = jest.fn().mockResolvedValue('mockedValue');
 }

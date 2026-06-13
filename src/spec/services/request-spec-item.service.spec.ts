@@ -7,6 +7,8 @@ import { ValidationService } from 'src/common/validations/schema-validation.serv
 import { EnvironmentRepository } from 'src/environment/repositories/environment.repository';
 import { RequestSpecItemRepository } from '../repositories/request-spec-item.repository';
 import { RequestSpecItemService } from './request-spec-item.service';
+import { ActionLogBufferService } from 'src/action-log/services/action-log-buffer.service';
+import { ActionLogBufferServiceMock } from 'src/action-log/__mock__/action-log-buffer.service';
 
 describe('RequestSpecItemService', () => {
   let service: RequestSpecItemService;
@@ -61,6 +63,10 @@ describe('RequestSpecItemService', () => {
           useValue: {
             update: jest.fn(),
           },
+        },
+        {
+          provide: ActionLogBufferService,
+          useValue: ActionLogBufferServiceMock,
         },
         {
           provide: I18nService,

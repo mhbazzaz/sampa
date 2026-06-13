@@ -16,6 +16,7 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const server = app.getHttpServer();
 
+  console.log(process.env.NODE_ENV);
   server.setTimeout(10 * 60 * 1000);
   server.keepAliveTimeout = 10 * 60 * 1000;
   server.headersTimeout = 10 * 60 * 1000 + 1000;

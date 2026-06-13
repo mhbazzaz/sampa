@@ -2,12 +2,14 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
-import axios from 'axios';
+import axios, { AxiosRequestConfig } from 'axios';
 import * as ExcelJS from 'exceljs';
 import { Row } from 'exceljs';
 import { Request, Response } from 'express';
 import { CsvFormatterStream, format } from 'fast-csv';
+import { appendFile } from 'fs/promises';
 import { I18nService } from 'nestjs-i18n';
 import * as requestIp from 'request-ip';
 import { ActionLogRepository } from 'src/action-log/repositories/action-log.repository';
@@ -19,13 +21,17 @@ import {
   UserActionEnum,
 } from 'src/common/enums/action-log.enum';
 import { AssetRoles } from 'src/common/enums/asset-roles.enum';
+import { AssetStatusEnum } from 'src/common/enums/asset-status.enum';
+import { AssetTypeClassificationEnum } from 'src/common/enums/asset-type-classification.enum';
 import {
   getSearchablePaths,
   getValuesFromJSON,
 } from 'src/common/helpers/get-searchable-values';
 import isObject from 'src/common/helpers/is-object';
 import { safeJsonParse } from 'src/common/helpers/safe-json-parse';
+import { storeFailedCurlRequest } from 'src/common/helpers/store-failed-curl-request';
 import { userMapperSingular } from 'src/common/helpers/user-mapper-singular';
+import { IDPUser } from 'src/common/interfaces/idp-user';
 import { PaginationDto } from 'src/common/pagination-dto/pagination.dto';
 import { ValidationService } from 'src/common/validations/schema-validation.service';
 import { FilterValue } from 'src/filter/entities/filter-value.entity';
@@ -42,6 +48,7 @@ import { Vault } from 'src/vault/vault';
 import { FindOneOptions, FindOptionsWhere, In } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { assetBodyReportJsonDto } from '../dto/input/asset-body-report-json.dto';
+import { AssetChangeStatusDto } from '../dto/input/asset-change-status.dto';
 import { assetSearchBodyReportExportExcelDto } from '../dto/input/asset-search-body-report-export-excel.dto';
 import { assetSearchBodyReportDto } from '../dto/input/asset-search-body-report.dto';
 import { CreateAssetDto } from '../dto/input/create-asset.dto';
@@ -51,13 +58,14 @@ import { FindAllAssetQueryWithOutPaginateDto } from '../dto/input/find-all-asset
 import { GetFilteredAssetVersions } from '../dto/input/get-filtered-asset-versions.dto';
 import { GetLogSourceGroupsDTO } from '../dto/input/get-log-source-groups.dto';
 import { UpdateAssetDto } from '../dto/input/update-asset.dto';
+import { LogSourceType } from '../dto/Log-Source-Type.dto';
+import { ProtocolType } from '../dto/Protocol-Type.dto';
 import { CreatedAssetFromFileResponseDto } from '../dto/response/created-from-file-response.dto';
 import { AssetVersion } from '../entities/asset-version.entity';
 import { Asset } from '../entities/asset.entity';
 import { AssetRelationRepository } from '../repositories/asset-relation.repository';
 import { AssetVersionRepository } from '../repositories/asset-version.repository';
 import { AssetRepository } from '../repositories/asset.repository';
-import { groups, logSourceType, protocolType } from './log-source-type';
 
 export interface searchBody {
   [name: string]: searchBody | string;
@@ -84,8 +92,6 @@ export class AssetService {
     private readonly actionLogRepository: ActionLogRepository,
     private readonly i18nService: I18nService,
   ) {}
-
-  private elasticIndex = 'assets';
 
   //------------------------------
   async findFilter(
@@ -116,7 +122,7 @@ export class AssetService {
 
   //------------------------------
   async create(
-    user: User | any,
+    user: IDPUser,
     userRoles: Role[],
     data: CreateAssetDto,
     req: Request,
@@ -312,8 +318,60 @@ export class AssetService {
     let logStatus: ActionLogStatusEnum = ActionLogStatusEnum.FAILED;
 
     try {
-      if (existingAssetTypeVersion.assetType?.name === 'Log Source') {
-        // @TODO
+      if (
+        existingAssetTypeVersion.classification ===
+        AssetTypeClassificationEnum.LogSource
+      ) {
+        const { content } = data as {
+          content: {
+            HostName: string;
+            IPAddress: string;
+            Type: { ID: number; Name: string };
+            ProtocolType: { ID: number; Name: string };
+            QradarGroup: { ID: number; Name: string };
+            Status: string;
+          };
+        };
+
+        const LSW_TOKEN = await Vault.instance.get('LSW_TOKEN');
+        const LSW_URL = await Vault.instance.get('LSW_URL');
+
+        const url = `${LSW_URL}/log-source/`;
+        const payload = {
+          log_source_type_id: content.Type.ID,
+          protocol_type_id: content.ProtocolType.ID,
+          ip: content.IPAddress,
+          hostname: content.HostName,
+          group_ids: [content.QradarGroup.ID],
+        };
+        const config: AxiosRequestConfig = {
+          headers: {
+            'X-Server-Auth-Key': LSW_TOKEN,
+            'X-Server-Username': user.username,
+          },
+        };
+
+        try {
+          const res = await axios.post(url, payload, config);
+          data.externalRefId = res.data.id;
+        } catch (error) {
+          const curlCommand = storeFailedCurlRequest(
+            url,
+            'POST',
+            payload,
+            config.headers,
+            error,
+          );
+
+          const timestamp = new Date().toISOString().replace(/:/g, '-');
+
+          await appendFile(
+            'failed_requests.log',
+            `\n--- FAILED REQUEST ${timestamp} ---\n${curlCommand}\n`,
+          );
+
+          throw error;
+        }
       }
 
       createdVersion = await this.assetRepository.createAssetWithVersions(
@@ -666,7 +724,7 @@ export class AssetService {
   async update(
     data: FindOptionsWhere<Asset>,
     updateAsset: UpdateAssetDto,
-    user: User,
+    user: IDPUser,
     userRoles: Role[],
     req: Request,
   ): Promise<AssetVersion> {
@@ -744,6 +802,36 @@ export class AssetService {
       decodedFilter,
       tagsFilter,
       query,
+    );
+
+    return { data: qb[0], count: qb[1] };
+  }
+
+  //------------------------------
+  async findAllLogSources(query: FindAllAssetQueryDto) {
+    const decodedFilter: string[] | undefined = query.filters
+      ? JSON.parse(decodeURIComponent(query.filters))
+      : undefined;
+
+    const tagsFilter: string[] | undefined = query.tags
+      ? decodeURIComponent(query.tags).split(',')
+      : undefined;
+
+    const assetTypeVersion = await this.assetTypeVersionRepository.findOne({
+      where: {
+        archived: false,
+        classification: AssetTypeClassificationEnum.LogSource,
+      },
+    });
+
+    if (!assetTypeVersion) {
+      throw new InternalServerErrorException('log source does not exist');
+    }
+
+    const qb = await this.assetVersionRepository.findAllPaginationWithFilter(
+      decodedFilter,
+      tagsFilter,
+      { ...query, assetTypeVersionId: assetTypeVersion.id },
     );
 
     return { data: qb[0], count: qb[1] };
@@ -853,10 +941,11 @@ export class AssetService {
     elasticsearchPage: number,
     elasticsearchSize: number,
     ids: string[],
+    assetTypeVersionId: string,
   ) {
     try {
       const data = await ElasticsearchClient.instance.client.search({
-        index: 'assets',
+        index: assetTypeVersionId,
         from: (elasticsearchPage - 1) * elasticsearchSize,
         size: elasticsearchSize,
         _source: ['_id'],
@@ -1000,13 +1089,14 @@ export class AssetService {
       this.recursivelyFlatKeysOfSearch(elasticBody, '', elasticQuery);
     }
     while (true) {
-      if (elasticQuery.length !== 1) {
+      if (elasticQuery.length !== 1 && typeof assetTypeVersionId === 'string') {
         ids = [];
         await this.getElasticSearchIds(
           elasticQuery,
           elasticsearchPage,
           elasticsearchSize,
           ids,
+          assetTypeVersionId,
         );
         elasticsearchPage++;
       }
@@ -1335,6 +1425,7 @@ export class AssetService {
           elasticsearchPage,
           elasticsearchSize,
           ids,
+          assetTypeVersionId,
         );
         elasticsearchPage++;
       }
@@ -1999,6 +2090,7 @@ export class AssetService {
           elasticsearchPage,
           elasticsearchSize,
           ids,
+          assetTypeVersionId,
         );
         elasticsearchPage++;
       }
@@ -2115,47 +2207,47 @@ export class AssetService {
   }
 
   //------------------------------
-  async autoComplete(
-    body: Record<string, Record<string, object | string> | string>,
-  ) {
-    const elasticQuery: Record<string, any>[] = [{ term: { archived: false } }];
-    for (const key in body) {
-      if (key === 'filters' || key === 'tags') {
-        continue;
-      }
-      const element = body[key];
-      if (element) {
-        if (typeof element === 'string') {
-          elasticQuery.push({
-            wildcard: { [key]: `${element.toLowerCase()}*` },
-          });
-        } else {
-          for (const key2 in element) {
-            const element2 = element[key2];
-            if (typeof element2 === 'string') {
-              elasticQuery.push({
-                wildcard: { [key + '.' + key2]: `${element2.toLowerCase()}*` },
-              });
-            }
-          }
-        }
-      }
-    }
+  // async autoComplete(
+  //   body: Record<string, Record<string, object | string> | string>,
+  // ) {
+  //   const elasticQuery: Record<string, any>[] = [{ term: { archived: false } }];
+  //   for (const key in body) {
+  //     if (key === 'filters' || key === 'tags') {
+  //       continue;
+  //     }
+  //     const element = body[key];
+  //     if (element) {
+  //       if (typeof element === 'string') {
+  //         elasticQuery.push({
+  //           wildcard: { [key]: `${element.toLowerCase()}*` },
+  //         });
+  //       } else {
+  //         for (const key2 in element) {
+  //           const element2 = element[key2];
+  //           if (typeof element2 === 'string') {
+  //             elasticQuery.push({
+  //               wildcard: { [key + '.' + key2]: `${element2.toLowerCase()}*` },
+  //             });
+  //           }
+  //         }
+  //       }
+  //     }
+  //   }
 
-    const data = await ElasticsearchClient.instance.client.search({
-      index: 'assets',
-      query: {
-        bool: {
-          must: elasticQuery,
-        },
-      },
-      // query: {
-      //   term: { 'SecurityConfiguration.Firewall': true },
-      // },
-    });
+  //   const data = await ElasticsearchClient.instance.client.search({
+  //     index: 'assets',
+  //     query: {
+  //       bool: {
+  //         must: elasticQuery,
+  //       },
+  //     },
+  //     // query: {
+  //     //   term: { 'SecurityConfiguration.Firewall': true },
+  //     // },
+  //   });
 
-    return data.hits.hits.map((hit) => hit._source);
-  }
+  //   return data.hits.hits.map((hit) => hit._source);
+  // }
 
   //------------------------------
   async findAllWithOutPaginate(query: FindAllAssetQueryWithOutPaginateDto) {
@@ -2310,81 +2402,94 @@ export class AssetService {
 
   //------------------------------
   async indexAllAssetsToElasticsearch() {
-    try {
-      await ElasticsearchClient.instance.client.indices.delete({
-        index: this.elasticIndex,
-      });
-    } catch (error) {
-      console.log(error);
-    }
-    await ElasticsearchClient.instance.client.indices.create({
-      index: this.elasticIndex,
-    });
+    const assetTypeVersions = await this.assetTypeVersionRepository.findAll();
+    console.log(assetTypeVersions);
 
-    const count = await this.assetVersionRepository.count();
-
-    for (let i = 0; i < Math.ceil(count / 100); i++) {
-      const assets = await this.assetVersionRepository.findAll({
-        take: 100,
-        skip: 100 * i,
-        where: { archived: false },
-        order: { createdAt: 'DESC' },
-        relations: { asset: true },
-      });
-
-      const operations = assets.flatMap((doc) => {
-        const { content, ...data } = doc;
-        return [
-          { index: { _index: this.elasticIndex, _id: doc.id } },
-          {
-            ...JSON.parse(content),
-            ...data,
-            referenceId: doc.asset?.referenceId,
-            externalRefId: doc.asset?.externalRefId,
-            name: doc.asset?.name,
-            description: doc.asset?.description,
-            content: undefined,
-            asset: undefined,
-          },
-        ];
-      });
-
+    for (let i = 0; i < assetTypeVersions.length; i++) {
+      const assetTypeVersion = assetTypeVersions[i];
       try {
-        const data = await ElasticsearchClient.instance.client.bulk({
-          refresh: true,
-          operations,
+        await ElasticsearchClient.instance.client.indices.delete({
+          index: assetTypeVersion.id,
         });
-
-        if (data?.errors) {
-          for (let i = 0; i < assets.length; i++) {
-            const element = assets[i];
-            try {
-              await ElasticsearchClient.instance.client.index({
-                index: 'assets',
-                id: element.id,
-                body: {
-                  ...JSON.parse(element.content),
-                  ...data,
-                  referenceId: element.asset?.referenceId,
-                  externalRefId: element.asset?.externalRefId,
-                  name: element.asset?.name,
-                  description: element.asset?.description,
-                  content: undefined,
-                  asset: undefined,
-                },
-              });
-              await ElasticsearchClient.instance.client.indices.refresh({
-                index: 'assets',
-              });
-            } catch (error) {
-              console.log(error, element);
-            }
-          }
-        }
       } catch (error) {
         console.log(error);
       }
+      await ElasticsearchClient.instance.client.indices.create({
+        index: assetTypeVersion.id,
+      });
+
+      const count = await this.assetVersionRepository.count({
+        where: { archived: false, assetTypeVersionId: assetTypeVersion.id },
+      });
+
+      for (let i = 0; i < Math.ceil(count / 100); i++) {
+        const assets = await this.assetVersionRepository.findAll({
+          take: 100,
+          skip: 100 * i,
+          where: { archived: false, assetTypeVersionId: assetTypeVersion.id },
+          order: { createdAt: 'DESC' },
+          relations: { asset: true },
+        });
+
+        if (assetTypeVersion.id === 'e1a42195-e9ce-4747-85d1-505e5ab142f4') {
+          console.log(assets);
+        }
+
+        const operations = assets.flatMap((doc) => {
+          const { content, ...data } = doc;
+          return [
+            { index: { _index: assetTypeVersion.id, _id: doc.id } },
+            {
+              ...JSON.parse(content),
+              ...data,
+              referenceId: doc.asset?.referenceId,
+              externalRefId: doc.asset?.externalRefId,
+              name: doc.asset?.name,
+              description: doc.asset?.description,
+              content: undefined,
+              asset: undefined,
+            },
+          ];
+        });
+
+        try {
+          const data = await ElasticsearchClient.instance.client.bulk({
+            refresh: true,
+            operations,
+          });
+
+          if (data?.errors) {
+            for (let i = 0; i < assets.length; i++) {
+              const element = assets[i];
+              try {
+                await ElasticsearchClient.instance.client.index({
+                  index: assetTypeVersion.id,
+                  id: element.id,
+                  body: {
+                    ...JSON.parse(element.content),
+                    ...data,
+                    referenceId: element.asset?.referenceId,
+                    externalRefId: element.asset?.externalRefId,
+                    name: element.asset?.name,
+                    description: element.asset?.description,
+                    content: undefined,
+                    asset: undefined,
+                  },
+                });
+                await ElasticsearchClient.instance.client.indices.refresh({
+                  index: assetTypeVersion.id,
+                });
+              } catch (error) {
+                console.log(error, element);
+              }
+            }
+          }
+        } catch (error) {
+          console.log(error);
+        }
+      }
     }
+
     return true;
   }
 
@@ -3073,8 +3178,21 @@ export class AssetService {
   }
 
   //------------------------------
-  async getLogSourceTypes(query: GetLogSourceGroupsDTO, user: User) {
-    let logSourceTypeToReturn = logSourceType;
+  async getLogSourceTypes(query: GetLogSourceGroupsDTO, user: IDPUser) {
+    const LSW_TOKEN = await Vault.instance.get('LSW_TOKEN');
+    const LSW_URL = await Vault.instance.get('LSW_URL');
+
+    const { data } = await axios.get<LogSourceType[]>(
+      `${LSW_URL}/qradar-lookup/log-source-types`,
+      {
+        headers: {
+          'X-Server-Auth-Key': LSW_TOKEN,
+          'X-Server-Username': user.username,
+        },
+      },
+    );
+
+    let logSourceTypeToReturn = data;
     if (query.label) {
       logSourceTypeToReturn = logSourceTypeToReturn.filter((logSourceType) =>
         logSourceType.name
@@ -3097,7 +3215,20 @@ export class AssetService {
   }
 
   //------------------------------
-  async getLogSourceGroups(query: GetLogSourceGroupsDTO, user: User) {
+  async getLogSourceGroups(query: GetLogSourceGroupsDTO, user: IDPUser) {
+    const LSW_TOKEN = await Vault.instance.get('LSW_TOKEN');
+    const LSW_URL = await Vault.instance.get('LSW_URL');
+
+    const { data: groups } = await axios.get<LogSourceType[]>(
+      `${LSW_URL}/qradar-lookup/log-source-types`,
+      {
+        headers: {
+          'X-Server-Auth-Key': LSW_TOKEN,
+          'X-Server-Username': user.username,
+        },
+      },
+    );
+
     let groupsToReturn = groups;
 
     if (query.label) {
@@ -3126,15 +3257,39 @@ export class AssetService {
   async getLogSourceProtocols(
     query: GetLogSourceGroupsDTO,
     typeId: string,
-    user: User,
+    user: IDPUser,
   ) {
-    const logSource = logSourceType
+    const LSW_TOKEN = await Vault.instance.get('LSW_TOKEN');
+    const LSW_URL = await Vault.instance.get('LSW_URL');
+
+    const { data } = await axios.get<LogSourceType[]>(
+      `${LSW_URL}/qradar-lookup/log-source-types`,
+      {
+        headers: {
+          'X-Server-Auth-Key': LSW_TOKEN,
+          'X-Server-Username': user.username,
+        },
+      },
+    );
+
+    const logSource = data
       .find((logSourceType) => logSourceType.id === +typeId)
       ?.protocol_types.map((protocolType) => protocolType.protocol_id);
 
     if (!logSource) {
       return [[], 0];
     }
+
+    const { data: protocolType } = await axios.get<ProtocolType[]>(
+      `${LSW_URL}/qradar-lookup/protocol-types`,
+      {
+        headers: {
+          'X-Server-Auth-Key': LSW_TOKEN,
+          'X-Server-Username': user.username,
+        },
+      },
+    );
+
     let protocolTypeToReturn = protocolType.filter((protocolType) =>
       logSource.includes(protocolType.id),
     );
@@ -3159,5 +3314,75 @@ export class AssetService {
         .splice(query.skip, query.take),
       protocolTypeToReturn.length,
     ];
+  }
+
+  async changeAssetStatus(
+    body: AssetChangeStatusDto,
+    id: string,
+    user: IDPUser,
+  ) {
+    const assetVersion = await this.assetVersionRepository.findOne({
+      where: { id },
+      relations: { assetTypeVersion: true, asset: true },
+    });
+
+    if (!assetVersion) {
+      throw new NotFoundException({
+        message: this.i18nService.t('messages.ERROR_ASSET_VERSION_NOT_FOUND'),
+      });
+    }
+
+    assetVersion.status = body.status;
+
+    if (
+      assetVersion.assetTypeVersion?.classification ===
+        AssetTypeClassificationEnum.LogSource &&
+      assetVersion.asset
+    ) {
+      const LSW_TOKEN = await Vault.instance.get('LSW_TOKEN');
+      const LSW_URL = await Vault.instance.get('LSW_URL');
+
+      const payload = undefined;
+      const config: AxiosRequestConfig = {
+        headers: {
+          'X-Server-Auth-Key': LSW_TOKEN,
+          'X-Server-Username': user.username,
+        },
+      };
+
+      let url: string = '';
+      if (body.status === AssetStatusEnum.Approved) {
+        url = `${LSW_URL}/request-change/${assetVersion.asset.externalRefId}/approve/`;
+      } else if (body.status === AssetStatusEnum.Declined) {
+        url = `${LSW_URL}/request-change/${assetVersion.asset.externalRefId}/reject/`;
+      }
+
+      if (!url) {
+        throw new BadRequestException();
+      }
+
+      try {
+        await axios.post(url, payload, config);
+      } catch (error) {
+        const curlCommand = storeFailedCurlRequest(
+          url,
+          'POST',
+          payload,
+          config.headers,
+          error,
+        );
+
+        const timestamp = new Date().toISOString().replace(/:/g, '-');
+
+        await appendFile(
+          'failed_requests.log',
+          `\n--- FAILED REQUEST ${timestamp} ---\n${curlCommand}\n`,
+        );
+
+        throw error;
+      }
+    }
+
+    this.assetVersionRepository.save(assetVersion);
   }
 }

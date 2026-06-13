@@ -86,6 +86,19 @@ const actions: {
       { name: ActionEnum.GetReport, process: ProcessEnum.AssetManagement },
     ],
   },
+  {
+    roleName: AssetRoles.LSWAdmin,
+    actionNames: [
+      {
+        name: ActionEnum.UpdateLogSourceState,
+        process: ProcessEnum.AssetManagement,
+      },
+      {
+        name: ActionEnum.Read,
+        process: ProcessEnum.AssetManagement,
+      },
+    ],
+  },
 ];
 
 export const ActionRoleSeeder = async (datasource: DataSource) => {
