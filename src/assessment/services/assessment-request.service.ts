@@ -1286,69 +1286,68 @@ export class AssessmentRequestService {
         !!filters.groupId ||
         !!filters.managementId;
 
-      const { data } = await axios.get(
-        `${IDP_SERVICE_URL}/idp/api/v1/auth/get-all-employees-internal-without-paginate`,
-        {
-          params: {
-            EmployeeId: filters.employeeId,
-            DepartmentId: filters.departmentId,
-            GroupId: filters.groupId,
-            ManagementId: filters.managementId,
-            GetInternalUsers: true,
+      if (hasEmployeeFilter) {
+        const { data } = await axios.get(
+          `${IDP_SERVICE_URL}/idp/api/v1/auth/get-all-employees-internal-without-paginate`,
+          {
+            params: {
+              EmployeeId: filters.employeeId,
+              DepartmentId: filters.departmentId,
+              GroupId: filters.groupId,
+              ManagementId: filters.managementId,
+              GetInternalUsers: true,
+            },
+            headers: {
+              'x-internal-communication-token': IDP_SERVICE_INTERNAL_TOKEN,
+              accept: '*/*',
+            },
           },
-          headers: {
-            'x-internal-communication-token': IDP_SERVICE_INTERNAL_TOKEN,
-            accept: '*/*',
-          },
-        },
-      );
-
-      const employees = data?.data ?? [];
-
-      const employeeIds = employees
-        .map((employee: any) => employee.EmployeeId)
-        .filter(Boolean);
-
-      if (employeeIds.length > 0) {
-        const userIds = await Promise.all(
-          employeeIds.map(async (employeeId: string) => {
-            try {
-              const { data } = await axios.post(
-                `${IDP_SERVICE_URL}/idp/api/v1/users`,
-                {
-                  domain: 'iranet',
-                  employeeId,
-                },
-                {
-                  headers: {
-                    'x-internal-communication-token':
-                      IDP_SERVICE_INTERNAL_TOKEN,
-                  },
-                },
-              );
-
-              return data.data.id ?? null;
-            } catch {
-              return null;
-            }
-          }),
         );
 
-        const applicantIds = [
-          ...new Set(userIds.filter((id): id is string => !!id)),
-        ];
+        const employees = data?.data ?? [];
 
-        filters.applicantIds = applicantIds;
-      }
+        const employeeIds = employees
+          .map((employee: any) => employee.EmployeeId)
+          .filter(Boolean);
 
-      if (
-        hasEmployeeFilter &&
-        (!filters.applicantIds || filters.applicantIds.length === 0)
-      ) {
-        return {
-          data: [],
-          total: 0,
-        };
+        if (employeeIds.length > 0) {
+          const userIds = await Promise.all(
+            employeeIds.map(async (employeeId: string) => {
+              try {
+                const { data } = await axios.post(
+                  `${IDP_SERVICE_URL}/idp/api/v1/users`,
+                  {
+                    domain: 'iranet',
+                    employeeId,
+                  },
+                  {
+                    headers: {
+                      'x-internal-communication-token':
+                        IDP_SERVICE_INTERNAL_TOKEN,
+                    },
+                  },
+                );
+
+                return data.data.id ?? null;
+              } catch {
+                return null;
+              }
+            }),
+          );
+
+          const applicantIds = Array.from(
+            new Set(userIds.filter((id: unknown): id is string => !!id)),
+          ) as string[];
+
+          filters.applicantIds = applicantIds;
+        }
+
+        if (!filters.applicantIds || filters.applicantIds.length === 0) {
+          return {
+            data: [],
+            total: 0,
+          };
+        }
       }
     } catch (error) {
       console.log(error.message);
