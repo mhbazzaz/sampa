@@ -1397,17 +1397,23 @@ export class AssetService {
     let workbook: ExcelJS.stream.xlsx.WorkbookWriter | undefined = undefined;
     if (type === 'csv') {
       res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename="data.csv"');
+      const date = new Date().toISOString().split('T')[0];
+      res.setHeader('Content-Disposition', `attachment; filename="asset-reports-${date}.csv"`);
     } else if (type === 'xls') {
       res.setHeader(
         'Content-Type',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       );
-      res.setHeader('Content-Disposition', 'attachment; filename="data.xlsx"');
+      const date = new Date().toISOString().split('T')[0];
+      res.setHeader('Content-Disposition', `attachment; filename="asset-reports-${date}.xlsx"`);
 
       workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res });
       worksheetInfo = workbook.addWorksheet('Info');
       worksheet = workbook.addWorksheet('V1');
+
+      worksheetInfo.getColumn('A').width = 20;
+      worksheetInfo.getColumn('B').width = 50;
+      worksheetInfo.getRow(1).height = 30;
     }
 
     let csvHeadersSet = false;
@@ -1527,6 +1533,51 @@ export class AssetService {
       const columns: { header: string; key: string }[] = [];
       const columnsArray: string[] = [];
 
+      const tableHeaderStyle = {
+        font: { bold: true, color: { argb: 'FFFFFF' } },
+        fill: {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: '4472C4' },
+        },
+        alignment: { vertical: 'middle', horizontal: 'center' },
+        border: {
+          top: { style: 'thin', color: { argb: '000000' } },
+          left: { style: 'thin', color: { argb: '000000' } },
+          bottom: { style: 'thin', color: { argb: '000000' } },
+          right: { style: 'thin', color: { argb: '000000' } },
+        },
+      };
+
+      const dataCellStyle = {
+        alignment: { vertical: 'middle', horizontal: 'left' },
+        border: {
+          top: { style: 'thin', color: { argb: 'D0D0D0' } },
+          left: { style: 'thin', color: { argb: 'D0D0D0' } },
+          bottom: { style: 'thin', color: { argb: 'D0D0D0' } },
+          right: { style: 'thin', color: { argb: 'D0D0D0' } },
+        },
+      };
+
+      const headerLabelStyle = {
+        font: { bold: true, size: 11 },
+        alignment: { vertical: 'middle', horizontal: 'left' },
+        border: {
+          left: { style: 'thin', color: { argb: '000000' } },
+          right: { style: 'thin', color: { argb: '000000' } },
+          bottom: { style: 'thin', color: { argb: '000000' } },
+        },
+      };
+
+      const headerValueStyle = {
+        alignment: { vertical: 'middle', horizontal: 'left' },
+        border: {
+          left: { style: 'thin', color: { argb: '000000' } },
+          right: { style: 'thin', color: { argb: '000000' } },
+          bottom: { style: 'thin', color: { argb: '000000' } },
+        },
+      };
+
       for (let i = 0; i < mappedData.length; i++) {
         const element = mappedData[i];
         if (element !== undefined) {
@@ -1546,7 +1597,24 @@ export class AssetService {
               worksheet.columns = [
                 ...new Map(columns.map((item) => [item.key, item])).values(),
               ];
-              worksheet.addRow(element);
+              if (i === 0) {
+                worksheet.getRow(1).eachCell((cell: any) => {
+                  cell.style = tableHeaderStyle;
+                });
+              }
+              const newRow = worksheet.addRow(element);
+              if (i % 2 === 0) {
+                newRow.eachCell((cell: any) => {
+                  cell.style = {
+                    ...dataCellStyle,
+                    fill: {
+                      type: 'pattern',
+                      pattern: 'solid',
+                      fgColor: { argb: 'F5F5F5' },
+                    },
+                  };
+                });
+              }
             }
           }
         }
@@ -1584,22 +1652,38 @@ export class AssetService {
             if (version !== assetType.assetTypeVersions?.length) {
               version++;
               worksheet = workbook.addWorksheet(`V${version}`);
+              // Apply header styling to new worksheet
+              worksheet.columns = worksheet.columns.map((column: any) => ({
+                ...column,
+                width: 20,
+              }));
               elasticsearchPage = 1;
               sqlPage = 1;
               continue;
             }
           }
 
-          worksheetInfo.getCell('A1').value = {
-            richText: [
-              {
-                font: { italic: true, size: 42, bold: true },
-                text: assetType?.name || '',
-              },
-            ],
-          };
+          const infoTitleStyle = {
+        font: { bold: true, size: 16, color: { argb: 'FFFFFF' } },
+        fill: {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: '2F5496' },
+        },
+        alignment: { vertical: 'middle', horizontal: 'center' },
+      };
 
-          let row = 2;
+      worksheetInfo.getCell('A1').value = {
+        richText: [
+          {
+            font: { italic: true, size: 18, bold: true },
+            text: assetType?.name || '',
+          },
+        ],
+      };
+      worksheetInfo.getCell('A1').style = infoTitleStyle;
+
+      let row = 2;
           if (assetTypeVersionId) {
             const assetTypeVersion =
               await this.assetTypeVersionRepository.findOne({
@@ -1609,28 +1693,34 @@ export class AssetService {
             worksheetInfo.getCell('A' + row).value = {
               richText: [{ text: 'version' }],
             };
+            worksheetInfo.getCell('A' + row).style = headerLabelStyle;
 
             worksheetInfo.getCell('B' + row).value = {
               richText: [{ text: assetTypeVersion?.version.toString() || '' }],
             };
+            worksheetInfo.getCell('B' + row).style = headerValueStyle;
             row++;
           }
           if (name) {
             worksheetInfo.getCell('A' + row).value = {
               richText: [{ text: 'name' }],
             };
+            worksheetInfo.getCell('A' + row).style = headerLabelStyle;
             worksheetInfo.getCell('B' + row).value = {
               richText: [{ text: name }],
             };
+            worksheetInfo.getCell('B' + row).style = headerValueStyle;
             row++;
           }
           if (externalRefId) {
             worksheetInfo.getCell('A' + row).value = {
               richText: [{ text: 'externalRefId' }],
             };
+            worksheetInfo.getCell('A' + row).style = headerLabelStyle;
             worksheetInfo.getCell('B' + row).value = {
               richText: [{ text: externalRefId }],
             };
+            worksheetInfo.getCell('B' + row).style = headerValueStyle;
             row++;
           }
           if (locationTypeId) {
@@ -1641,9 +1731,11 @@ export class AssetService {
               worksheetInfo.getCell('A' + row).value = {
                 richText: [{ text: 'locationType' }],
               };
+              worksheetInfo.getCell('A' + row).style = headerLabelStyle;
               worksheetInfo.getCell('B' + row).value = {
                 richText: [{ text: locationType.name }],
               };
+              worksheetInfo.getCell('B' + row).style = headerValueStyle;
               row++;
             }
           }
@@ -1655,9 +1747,11 @@ export class AssetService {
               worksheetInfo.getCell('A' + row).value = {
                 richText: [{ text: 'location' }],
               };
+              worksheetInfo.getCell('A' + row).style = headerLabelStyle;
               worksheetInfo.getCell('B' + row).value = {
                 richText: [{ text: location.name }],
               };
+              worksheetInfo.getCell('B' + row).style = headerValueStyle;
               row++;
             }
           }
@@ -1670,6 +1764,7 @@ export class AssetService {
                   worksheetInfo.getCell('A' + row).value = {
                     richText: [{ text: key }],
                   };
+                  worksheetInfo.getCell('A' + row).style = headerLabelStyle;
                   worksheetInfo.getCell('B' + row).value = {
                     richText: [
                       {
@@ -1679,6 +1774,7 @@ export class AssetService {
                       },
                     ],
                   };
+                  worksheetInfo.getCell('B' + row).style = headerValueStyle;
                   row++;
                 }
               }
@@ -1689,6 +1785,7 @@ export class AssetService {
                   worksheetInfo.getCell('A' + row).value = {
                     richText: [{ text: key }],
                   };
+                  worksheetInfo.getCell('A' + row).style = headerLabelStyle;
                   worksheetInfo.getCell('B' + row).value = {
                     richText: [
                       {
@@ -1698,6 +1795,7 @@ export class AssetService {
                       },
                     ],
                   };
+                  worksheetInfo.getCell('B' + row).style = headerValueStyle;
                   row++;
                 }
               }
@@ -1706,6 +1804,7 @@ export class AssetService {
                   worksheetInfo.getCell('A' + row).value = {
                     richText: [{ text: key }],
                   };
+                  worksheetInfo.getCell('A' + row).style = headerLabelStyle;
                   worksheetInfo.getCell('B' + row).value = {
                     richText: [
                       {
@@ -1715,6 +1814,7 @@ export class AssetService {
                       },
                     ],
                   };
+                  worksheetInfo.getCell('B' + row).style = headerValueStyle;
                   row++;
                 }
               }
@@ -1723,6 +1823,7 @@ export class AssetService {
                   worksheetInfo.getCell('A' + row).value = {
                     richText: [{ text: key }],
                   };
+                  worksheetInfo.getCell('A' + row).style = headerLabelStyle;
                   worksheetInfo.getCell('B' + row).value = {
                     richText: [
                       {
@@ -1732,6 +1833,7 @@ export class AssetService {
                       },
                     ],
                   };
+                  worksheetInfo.getCell('B' + row).style = headerValueStyle;
                   row++;
                 }
               }
@@ -1739,12 +1841,29 @@ export class AssetService {
           }
 
           worksheetInfo.columns.forEach((column) => {
-            const lengths = column.values?.map((v) => v?.toString().length);
+            const lengths = column.values?.map((v: any) => v?.toString().length);
             if (lengths) {
               const maxLength = Math.max(
-                ...lengths.filter((v) => typeof v === 'number'),
+                ...lengths.filter((v: number) => typeof v === 'number'),
               );
-              column.width = maxLength;
+              column.width = Math.min(maxLength + 2, 50);
+            }
+          });
+
+          // Merge cells for title - extend to cover all label-value pairs
+          worksheetInfo.mergeCells(`A1:B${row}`);
+
+          // Style the Info sheet label column (column A)
+          worksheetInfo.getColumn('A').eachCell((cell: any) => {
+            if (cell.row > 1) {
+              cell.style = headerLabelStyle;
+            }
+          });
+
+          // Style the Info sheet value column (column B)
+          worksheetInfo.getColumn('B').eachCell((cell: any) => {
+            if (cell.row > 1) {
+              cell.style = headerValueStyle;
             }
           });
 
