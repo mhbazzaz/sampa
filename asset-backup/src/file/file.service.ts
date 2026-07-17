@@ -12,6 +12,7 @@ import * as fs from 'fs';
 import { I18nService } from 'nestjs-i18n';
 import { basename, extname, join } from 'path';
 import { stringify } from 'querystring';
+import { ILike } from 'typeorm';
 import { AssetTypeVersionRepository } from 'src/asset-type/repositories/asset-type-version.repository';
 import { AssetTypeRepository } from 'src/asset-type/repositories/asset-type.repository';
 import { AssetTypeService } from 'src/asset-type/services/asset-type.service';
@@ -336,6 +337,34 @@ export class FileService {
           continue outerLoop;
         }
 
+        // Check if asset exists with NAME* in externalRefId (partial match - warning only)
+        const existingVMWithName = await this.assetRepository.findOne({
+          where: { externalRefId: ILike(`%${item['NAME*']}%`) },
+        });
+
+        // Check if asset exists with IP in externalRefId (partial match - error, skip creation)
+        if (ipArray.length > 0) {
+          const existingVMWithIP = await this.assetRepository.findOne({
+            where: { externalRefId: ILike(`%${ipArray[0]}%`) },
+          });
+
+          if (existingVMWithIP) {
+            errors.push({
+              step: 'Asset Creation',
+              message: `Row ${originalIndex + 1} - Error : Virtual machine with IP ${ipArray[0]} in external reference Id already exists`,
+            });
+            continue outerLoop;
+          }
+        }
+
+        // If NAME exists but full externalRefId doesn't, add warning but proceed
+        if (existingVMWithName) {
+          errors.push({
+            step: 'Asset Creation',
+            message: `Row ${originalIndex + 1} - Warning : Virtual machine with name ${item['NAME*']} already exists in external reference Id ${existingVMWithName.externalRefId}`,
+          });
+        }
+
         const relatedAssetForVM: string[] = [];
         const inquiryAccountableData = await this.getUserInfoByUsername(
           request,
@@ -605,6 +634,34 @@ export class FileService {
             message: `Row ${originalIndex + 1} - Warning : Client with external reference Id : ${existingClient.externalRefId} is already exists`,
           });
           continue outerLoop;
+        }
+
+        // Check if asset exists with DEVICE_NAME* in externalRefId (partial match - warning only)
+        const existingClientWithName = await this.assetRepository.findOne({
+          where: { externalRefId: ILike(`%${item['DEVICE_NAME*']}%`) },
+        });
+
+        // Check if asset exists with IP in externalRefId (partial match - error, skip creation)
+        if (ipArray.length > 0) {
+          const existingClientWithIP = await this.assetRepository.findOne({
+            where: { externalRefId: ILike(`%${ipArray[0]}%`) },
+          });
+
+          if (existingClientWithIP) {
+            errors.push({
+              step: 'Asset Creation',
+              message: `Row ${originalIndex + 1} - Error : Client with IP ${ipArray[0]} in external reference Id already exists`,
+            });
+            continue outerLoop;
+          }
+        }
+
+        // If NAME exists but full externalRefId doesn't, add warning but proceed
+        if (existingClientWithName) {
+          errors.push({
+            step: 'Asset Creation',
+            message: `Row ${originalIndex + 1} - Warning : Client with name ${item['DEVICE_NAME*']} already exists in external reference Id ${existingClientWithName.externalRefId}`,
+          });
         }
 
         const relatedAssetForClient: string[] = [];
@@ -917,6 +974,34 @@ export class FileService {
           continue outerLoop;
         }
 
+        // Check if asset exists with Host Name in externalRefId (partial match - warning only)
+        const existingNAWithName = await this.assetRepository.findOne({
+          where: { externalRefId: ILike(`%${item['Host Name']}%`) },
+        });
+
+        // Check if asset exists with IP in externalRefId (partial match - error, skip creation)
+        if (item['IP']) {
+          const existingNAWithIP = await this.assetRepository.findOne({
+            where: { externalRefId: ILike(`%${item['IP']}%`) },
+          });
+
+          if (existingNAWithIP) {
+            errors.push({
+              step: 'Asset Creation',
+              message: `Row ${originalIndex + 1} - Error : Network adaptor with IP ${item['IP']} in external reference Id already exists`,
+            });
+            continue outerLoop;
+          }
+        }
+
+        // If Host Name exists but full externalRefId doesn't, add warning but proceed
+        if (existingNAWithName) {
+          errors.push({
+            step: 'Asset Creation',
+            message: `Row ${originalIndex + 1} - Warning : Network adaptor with name ${item['Host Name']} already exists in external reference Id ${existingNAWithName.externalRefId}`,
+          });
+        }
+
         let createdNetworkAdaptor: CreatedAssetFromFileResponseDto;
         let useAgeEdge: string;
         let internetConnected: boolean = false;
@@ -1137,7 +1222,6 @@ export class FileService {
           .map((ip: string) => ip.trim())
           .filter(Boolean);
         const externalRefId = `${item['NAME*']}@${ipArray[0] || ''}`;
-
         const existingServer = await this.assetRepository.findOne({
           where: { externalRefId, assetTypeId: existingServerType.id },
         });
@@ -1148,6 +1232,34 @@ export class FileService {
             message: `Row ${originalIndex + 1} - Server ${externalRefId} already exists`,
           });
           continue outerLoop;
+        }
+
+        // Check if asset exists with NAME* in externalRefId (partial match - warning only)
+        const existingServerWithName = await this.assetRepository.findOne({
+          where: { externalRefId: ILike(`%${item['NAME*']}%`) },
+        });
+
+        // Check if asset exists with IP in externalRefId (partial match - error, skip creation)
+        if (ipArray.length > 0) {
+          const existingServerWithIP = await this.assetRepository.findOne({
+            where: { externalRefId: ILike(`%${ipArray[0]}%`) },
+          });
+
+          if (existingServerWithIP) {
+            errors.push({
+              step: 'Asset Creation',
+              message: `Row ${originalIndex + 1} - Error : Server with IP ${ipArray[0]} in external reference Id already exists`,
+            });
+            continue outerLoop;
+          }
+        }
+
+        // If NAME exists but full externalRefId doesn't, add warning but proceed
+        if (existingServerWithName) {
+          errors.push({
+            step: 'Asset Creation',
+            message: `Row ${originalIndex + 1} - Warning : Server with name ${item['NAME*']} already exists in external reference Id ${existingServerWithName.externalRefId}`,
+          });
         }
 
         const relatedAssetForServer: string[] = [];
