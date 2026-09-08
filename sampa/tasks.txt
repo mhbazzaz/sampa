@@ -1,0 +1,29 @@
+
+ASSET TASKS:
+
+1-
+On Asset Edit, restrict when isShareable is true
+برای دارایی هایی که فقط قابلیت view وجود دارد (مانند isSHareable=true) هنگام زدن دکمه edit در لیستهای جستجو خطای عدم دسترسی نمایش داده شود.
+
+2-
+Having Deputy/Management/Group data of each Accountable/Responsible in Asset
+
+
+
+
+SAMPA TASKS: 
+
+1-
+Implement Public/Private Request Specs (services)
+In order to fill out Request Specs by Auditors, we should also have Private ones which are only visible for Security Dept. The public (general) Request Spec is completed by Applicant before sending Request to CISO.
+
+امکان انتخاب عمومی/محرمانه پیش نیاز ارزیابی از طریق گزینه ای در پنل ادمین انجام شود.
+همچنین پیش نیازهای ارزیابی عمومی که می توانند در صفحه اولیه درخواست توسط متقاضی پر شوند (Base Request Spec) توسط گزینه ای در پنل ادمین مشخص شوند.
+
+
+
+NOTIFICATION TASKS:
+
+1-
+Implement Notification Dashboard Services
+

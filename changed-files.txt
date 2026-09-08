@@ -1,0 +1,18 @@
+
+SAMPA : 
+
+These files were changed for the remained-vulnerability report identity fix:
+
+sampa/src/assessment/helpers/idp-employee-org.helper.ts — strip iranet\, match by username only, never by EmployeeId
+sampa/src/assessment/services/remained-vulnerability-report.service.ts — IDP → SAMPA members → findings by member id
+sampa/src/assessment/repositories/remained-vulnerability-report.repository.ts — filter with applicantId IN (...) instead of username
+sampa/src/assessment/types/remained-vulnerability-finding.ts — applicantIds instead of applicantUsernames
+sampa/src/assessment/helpers/remained-vulnerability-aggregator.ts — look up org by member id
+sampa/src/member/repositories/member.repository.ts — findIdentitiesByIds / findIdentitiesByUsernames
+
+
+===================================================
+DARFA : 
+
+Asset service
+File service

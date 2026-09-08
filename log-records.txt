@@ -1,5 +1,0 @@
-Shared Instance attribute for AssetType(Version)
-
-
-There are asset types which can be seen (but not create/edit) and relate to other assets regardless of their ownership. So AssetTypeVersion should have an attribute named "Shared Instance" for pointing out this facility which should be set from Admin Panel.
-
