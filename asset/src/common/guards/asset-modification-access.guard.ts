@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   ForbiddenException,
   Injectable,
+  Logger,
 } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
 import { AssetVersionRepository } from 'src/asset/repositories/asset-version.repository';
@@ -12,11 +13,28 @@ import { AssetRoles } from '../enums/asset-roles.enum';
 
 @Injectable()
 export class AssetModificationAccessGuard implements CanActivate {
+  private readonly userScopeLogger = new Logger('UserScope');
+
   constructor(
     private readonly i18nService: I18nService,
     private readonly assetVersionRepository: AssetVersionRepository,
     private readonly assetService: AssetService,
   ) {}
+
+  private logUserScope(
+    traceId: string,
+    step: string,
+    details: Record<string, unknown> = {},
+  ) {
+    this.userScopeLogger.log(
+      JSON.stringify({
+        tag: 'USER_SCOPE',
+        traceId,
+        step,
+        ...details,
+      }),
+    );
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
@@ -26,12 +44,19 @@ export class AssetModificationAccessGuard implements CanActivate {
     const unauthorizedMessage = this.i18nService.t(
       'messages.ERROR_NOT_AUTHORIZED_TO_CREATE_OR_UPDATE_ASSET',
     );
+    const traceId = `us-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-    const hasAdministratorRole = userRoles.some(
+    const hasAdministratorRole = (userRoles || []).some(
       (r) => r.name === AssetRoles.AssetAdministrator,
     );
 
     if (hasAdministratorRole) {
+      this.logUserScope(traceId, 'guard.allow', {
+        reason: 'administrator',
+        username: user?.username,
+        userId: user?.id,
+        avId: avId ?? null,
+      });
       return true;
     }
 
@@ -51,15 +76,34 @@ export class AssetModificationAccessGuard implements CanActivate {
       editorId = request.body?.editorId || null;
     }
 
-    const hasSupervisorRole = userRoles.some(
+    const hasSupervisorRole = (userRoles || []).some(
       (r) => r.name === AssetRoles.AssetSupervisor,
     );
-    const hasAuditorRole = userRoles.some(
+    const hasAuditorRole = (userRoles || []).some(
       (r) => r.name === AssetRoles.AssetAuditor,
     );
-    const hasUserRole = userRoles.some((r) => r.name === AssetRoles.AssetUser);
+    const hasUserRole = (userRoles || []).some(
+      (r) => r.name === AssetRoles.AssetUser,
+    );
+
+    this.logUserScope(traceId, 'guard.start', {
+      username: user?.username,
+      userId: user?.id,
+      avId: avId ?? null,
+      accountableId,
+      editorId,
+      roleNames: (userRoles || []).map((role) => role.name),
+      hasAdministratorRole,
+      hasSupervisorRole,
+      hasAuditorRole,
+      hasUserRole,
+    });
 
     if (hasAuditorRole) {
+      this.logUserScope(traceId, 'guard.allow', {
+        reason: 'auditor',
+        username: user?.username,
+      });
       return true;
     }
 
@@ -67,11 +111,22 @@ export class AssetModificationAccessGuard implements CanActivate {
       const supervisorScopeIds = await this.assetService.buildSupervisorScope(
         user.username,
         user.id,
+        traceId,
       );
 
       const hasAccess =
         (accountableId && supervisorScopeIds.includes(accountableId)) ||
         (editorId && supervisorScopeIds.includes(editorId));
+
+      this.logUserScope(traceId, hasAccess ? 'guard.allow' : 'guard.deny', {
+        reason: 'supervisor',
+        username: user?.username,
+        accountableId,
+        editorId,
+        supervisorCount: supervisorScopeIds.length,
+        supervisorScopeIds,
+        hasAccess,
+      });
 
       if (hasAccess) return true;
 
@@ -80,22 +135,45 @@ export class AssetModificationAccessGuard implements CanActivate {
 
     if (hasUserRole) {
       if (user.id === accountableId || user.id === editorId) {
+        this.logUserScope(traceId, 'guard.allow', {
+          reason: 'asset-user-direct',
+          username: user?.username,
+          userId: user.id,
+          accountableId,
+          editorId,
+        });
         return true;
       }
 
       const assetUserScopeIds = await this.assetService.buildAssetUserScope(
         user.username,
         user.id,
+        traceId,
       );
 
       const hasAccess =
         (accountableId && assetUserScopeIds.includes(accountableId)) ||
         (editorId && assetUserScopeIds.includes(editorId));
 
+      this.logUserScope(traceId, hasAccess ? 'guard.allow' : 'guard.deny', {
+        reason: 'asset-user-scope',
+        username: user?.username,
+        accountableId,
+        editorId,
+        assetUserCount: assetUserScopeIds.length,
+        assetUserScopeIds,
+        hasAccess,
+      });
+
       if (hasAccess) return true;
 
       throw new ForbiddenException(unauthorizedMessage);
     }
+
+    this.logUserScope(traceId, 'guard.deny', {
+      reason: 'no-matching-role',
+      username: user?.username,
+    });
 
     throw new ForbiddenException(unauthorizedMessage);
   }

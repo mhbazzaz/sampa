@@ -155,6 +155,7 @@ describe('AssetService user scope authorization', () => {
       expect((service as any).buildSupervisorScope).toHaveBeenCalledWith(
         'jane',
         'user-1',
+        expect.any(String),
       );
       expect(
         assetVersionRepository.findAllPaginationWithFilter,
@@ -183,6 +184,7 @@ describe('AssetService user scope authorization', () => {
       expect((service as any).buildAssetUserScope).toHaveBeenCalledWith(
         'jane',
         'user-1',
+        expect.any(String),
       );
       expect(
         assetVersionRepository.findAllPaginationWithFilter,
@@ -253,6 +255,7 @@ describe('AssetService user scope authorization', () => {
       expect((service as any).buildSupervisorScope).toHaveBeenCalledWith(
         'jane',
         'user-1',
+        expect.any(String),
       );
       expect((service as any).buildAssetUserScope).not.toHaveBeenCalled();
       expect(
@@ -287,6 +290,7 @@ describe('AssetService user scope authorization', () => {
       expect((service as any).buildAssetUserScope).toHaveBeenCalledWith(
         'jane',
         'user-1',
+        expect.any(String),
       );
       expect((service as any).buildSupervisorScope).not.toHaveBeenCalled();
       expect(
@@ -324,6 +328,7 @@ describe('AssetService user scope authorization', () => {
       expect((service as any).buildSupervisorScope).toHaveBeenCalledWith(
         'jane',
         'user-1',
+        expect.any(String),
       );
       expect((service as any).buildAssetUserScope).not.toHaveBeenCalled();
       const queryOptions =
@@ -408,6 +413,7 @@ describe('AssetService user scope authorization', () => {
       expect((service as any).buildSupervisorScope).toHaveBeenCalledWith(
         'jane',
         'user-1',
+        expect.any(String),
       );
       expect((service as any).buildAssetUserScope).not.toHaveBeenCalled();
       expect(
@@ -433,6 +439,7 @@ describe('AssetService user scope authorization', () => {
       expect((service as any).buildAssetUserScope).toHaveBeenCalledWith(
         'jane',
         'user-1',
+        expect.any(String),
       );
       expect((service as any).buildSupervisorScope).not.toHaveBeenCalled();
       expect(
@@ -461,6 +468,7 @@ describe('AssetService user scope authorization', () => {
       expect((service as any).buildSupervisorScope).toHaveBeenCalledWith(
         'jane',
         'user-1',
+        expect.any(String),
       );
       expect((service as any).buildAssetUserScope).not.toHaveBeenCalled();
       const queryOptions =

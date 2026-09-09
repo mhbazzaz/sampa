@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import axios, { AxiosRequestConfig } from 'axios';
@@ -56,7 +57,6 @@ import { CreateAssetDto } from '../dto/input/create-asset.dto';
 import { FindAllAssetQueryDto } from '../dto/input/find-all-asset-query.dto';
 import { findAllAssetReportQueryDto } from '../dto/input/find-all-asset-report.query.dto';
 import { FindAllAssetQueryWithOutPaginateDto } from '../dto/input/find-all-asset-without-paginate.dto';
-import { GetFilteredAssetVersions } from '../dto/input/get-filtered-asset-versions.dto';
 import { GetLogSourceGroupsDTO } from '../dto/input/get-log-source-groups.dto';
 import { UpdateAssetDto } from '../dto/input/update-asset.dto';
 import { LogSourceType } from '../dto/Log-Source-Type.dto';
@@ -85,6 +85,8 @@ type ExcelReportSheetState = {
 
 @Injectable()
 export class AssetService {
+  private readonly userScopeLogger = new Logger('UserScope');
+
   constructor(
     private readonly assetRepository: AssetRepository,
     private readonly assetVersionRepository: AssetVersionRepository,
@@ -100,6 +102,64 @@ export class AssetService {
     private readonly actionLogRepository: ActionLogRepository,
     private readonly i18nService: I18nService,
   ) {}
+
+  //------------------------------
+  private createUserScopeTraceId(): string {
+    return `us-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  //------------------------------
+  private logUserScope(
+    traceId: string,
+    step: string,
+    details: Record<string, unknown> = {},
+  ) {
+    this.userScopeLogger.log(
+      JSON.stringify({
+        tag: 'USER_SCOPE',
+        traceId,
+        step,
+        ...details,
+      }),
+    );
+  }
+
+  //------------------------------
+  private summarizeEmployees(employees: any[], limit = 40) {
+    const list = Array.isArray(employees) ? employees : [];
+    return {
+      count: list.length,
+      people: list.slice(0, limit).map((employee) => ({
+        EmployeeId: employee?.EmployeeId ?? null,
+        idpUserId: employee?.idpUserId ?? employee?.IdpUserId ?? null,
+        ManagerId: employee?.ManagerId ?? null,
+        DepartmentId: employee?.DepartmentId ?? null,
+        ADUserName: employee?.ADUserName ?? null,
+        extractedScopeId: this.extractEmployeeScopeId(employee) ?? null,
+      })),
+      truncated: list.length > limit,
+    };
+  }
+
+  //------------------------------
+  private describePayloadShape(payload: unknown) {
+    if (Array.isArray(payload)) {
+      return { kind: 'array', length: payload.length };
+    }
+    if (payload && typeof payload === 'object') {
+      const data = (payload as { data?: unknown }).data;
+      return {
+        kind: 'object',
+        keys: Object.keys(payload as object),
+        dataIsArray: Array.isArray(data),
+        dataLength: Array.isArray(data) ? data.length : undefined,
+        nestedDataIsArray: Array.isArray(
+          (data as { data?: unknown } | undefined)?.data,
+        ),
+      };
+    }
+    return { kind: typeof payload };
+  }
 
   //------------------------------
   async findFilter(
@@ -757,60 +817,114 @@ export class AssetService {
       const unauthorizedMessage = this.i18nService.t(
         'messages.ERROR_NOT_AUTHORIZED_TO_CREATE_OR_UPDATE_ASSET',
       );
+      const traceId = this.createUserScopeTraceId();
+      const roleNames = (userRoles || []).map((role) => role.name);
       const hasAdministratorRole = userRoles.some(
         (r) => r.name === AssetRoles.AssetAdministrator,
       );
+      const hasAuditorRole = userRoles.some(
+        (r) => r.name === AssetRoles.AssetAuditor,
+      );
+      const hasSupervisorRole = userRoles.some(
+        (r) => r.name === AssetRoles.AssetSupervisor,
+      );
+      const hasUserRole = userRoles.some((r) => r.name === AssetRoles.AssetUser);
 
-      if (!hasAdministratorRole) {
-        const hasAuditorRole = userRoles.some(
-          (r) => r.name === AssetRoles.AssetAuditor,
+      this.logUserScope(traceId, 'find-one-access.start', {
+        username: user?.username,
+        userId: user?.id,
+        assetVersionId: assetVersion.id,
+        accountableId: assetVersion.accountableId ?? null,
+        editorId: assetVersion.editorId ?? null,
+        roleNames,
+        hasAdministratorRole,
+        hasAuditorRole,
+        hasSupervisorRole,
+        hasUserRole,
+      });
+
+      if (hasAdministratorRole) {
+        this.logUserScope(traceId, 'find-one-access.allow', {
+          reason: 'administrator',
+        });
+      } else if (hasAuditorRole) {
+        this.logUserScope(traceId, 'find-one-access.allow', {
+          reason: 'auditor',
+        });
+      } else if (hasSupervisorRole && user) {
+        const supervisorScopeIds = await this.buildSupervisorScope(
+          user.username,
+          user.id,
+          traceId,
         );
-        const hasSupervisorRole = userRoles.some(
-          (r) => r.name === AssetRoles.AssetSupervisor,
-        );
-        const hasUserRole = userRoles.some(
-          (r) => r.name === AssetRoles.AssetUser,
+        const hasAccess =
+          (assetVersion.accountableId &&
+            supervisorScopeIds.includes(assetVersion.accountableId)) ||
+          (assetVersion.editorId &&
+            supervisorScopeIds.includes(assetVersion.editorId));
+
+        this.logUserScope(
+          traceId,
+          hasAccess ? 'find-one-access.allow' : 'find-one-access.deny',
+          {
+            reason: 'supervisor',
+            accountableId: assetVersion.accountableId ?? null,
+            editorId: assetVersion.editorId ?? null,
+            supervisorCount: supervisorScopeIds.length,
+            supervisorScopeIds,
+            hasAccess,
+          },
         );
 
-        if (hasAuditorRole) {
-          // Auditors follow the current guard behavior and can pass.
-        } else if (hasSupervisorRole && user) {
-          const supervisorScopeIds = await this.buildSupervisorScope(
+        if (!hasAccess) {
+          throw new ForbiddenException(unauthorizedMessage);
+        }
+      } else if (hasUserRole && user) {
+        const isDirectlyResponsible =
+          user.id === assetVersion.accountableId ||
+          user.id === assetVersion.editorId;
+
+        if (isDirectlyResponsible) {
+          this.logUserScope(traceId, 'find-one-access.allow', {
+            reason: 'asset-user-direct',
+            userId: user.id,
+            accountableId: assetVersion.accountableId ?? null,
+            editorId: assetVersion.editorId ?? null,
+          });
+        } else {
+          const assetUserScopeIds = await this.buildAssetUserScope(
             user.username,
             user.id,
+            traceId,
           );
           const hasAccess =
             (assetVersion.accountableId &&
-              supervisorScopeIds.includes(assetVersion.accountableId)) ||
+              assetUserScopeIds.includes(assetVersion.accountableId)) ||
             (assetVersion.editorId &&
-              supervisorScopeIds.includes(assetVersion.editorId));
+              assetUserScopeIds.includes(assetVersion.editorId));
+
+          this.logUserScope(
+            traceId,
+            hasAccess ? 'find-one-access.allow' : 'find-one-access.deny',
+            {
+              reason: 'asset-user-scope',
+              accountableId: assetVersion.accountableId ?? null,
+              editorId: assetVersion.editorId ?? null,
+              assetUserCount: assetUserScopeIds.length,
+              assetUserScopeIds,
+              hasAccess,
+            },
+          );
 
           if (!hasAccess) {
             throw new ForbiddenException(unauthorizedMessage);
           }
-        } else if (hasUserRole && user) {
-          const isDirectlyResponsible =
-            user.id === assetVersion.accountableId ||
-            user.id === assetVersion.editorId;
-
-          if (!isDirectlyResponsible) {
-            const assetUserScopeIds = await this.buildAssetUserScope(
-              user.username,
-              user.id,
-            );
-            const hasAccess =
-              (assetVersion.accountableId &&
-                assetUserScopeIds.includes(assetVersion.accountableId)) ||
-              (assetVersion.editorId &&
-                assetUserScopeIds.includes(assetVersion.editorId));
-
-            if (!hasAccess) {
-              throw new ForbiddenException(unauthorizedMessage);
-            }
-          }
-        } else {
-          throw new ForbiddenException(unauthorizedMessage);
         }
+      } else {
+        this.logUserScope(traceId, 'find-one-access.deny', {
+          reason: 'no-matching-role',
+        });
+        throw new ForbiddenException(unauthorizedMessage);
       }
     }
 
@@ -1106,9 +1220,19 @@ export class AssetService {
   private async resolveUserScopeQueryOptions(
     user: User | any,
     userRoles: Role[],
+    source = 'unknown',
   ): Promise<
     Pick<FindAllAssetQueryDto, 'assetUserScopeIds' | 'supervisorEmployeeIds'>
   > {
+    const traceId = this.createUserScopeTraceId();
+    const roleNames = (userRoles || []).map((role) => role.name);
+    this.logUserScope(traceId, 'resolve.start', {
+      source,
+      username: user?.username,
+      userId: user?.id,
+      roleNames,
+    });
+
     const hasAdministratorRole = userRoles.some(
       (r) => r.name === AssetRoles.AssetAdministrator,
     );
@@ -1124,9 +1248,13 @@ export class AssetService {
       );
 
       if (hasSupervisor) {
+        this.logUserScope(traceId, 'resolve.supervisor', {
+          username: user?.username,
+        });
         scopeEmployeeIds = await this.buildSupervisorScope(
           user.username,
           user.id,
+          traceId,
         );
       }
 
@@ -1140,12 +1268,26 @@ export class AssetService {
       const hasFullAccess = hasSupervisor || hasAuditor;
       shouldApplyUserScope = hasAssetUser && !hasFullAccess;
 
+      this.logUserScope(traceId, 'resolve.roles', {
+        hasAdministratorRole,
+        hasSupervisor,
+        hasAuditor,
+        hasAssetUser,
+        hasFullAccess,
+        shouldApplyUserScope,
+      });
+
       if (shouldApplyUserScope) {
         assetUserScopeIds = await this.buildAssetUserScope(
           user.username,
           user.id,
+          traceId,
         );
       }
+    } else {
+      this.logUserScope(traceId, 'resolve.administrator', {
+        message: 'No user-scope filter applied',
+      });
     }
 
     if (
@@ -1153,13 +1295,27 @@ export class AssetService {
       scopeEmployeeIds.length === 0 &&
       typeof user?.id === 'string'
     ) {
+      this.logUserScope(traceId, 'resolve.supervisor-empty-fallback', {
+        fallbackUserId: user.id,
+      });
       scopeEmployeeIds = [user.id];
     }
 
-    return {
+    const result = {
       ...(shouldApplyUserScope && { assetUserScopeIds }),
       ...(hasSupervisor && { supervisorEmployeeIds: scopeEmployeeIds }),
     };
+
+    this.logUserScope(traceId, 'resolve.done', {
+      source,
+      supervisorCount: scopeEmployeeIds.length,
+      supervisorEmployeeIds: scopeEmployeeIds,
+      assetUserCount: assetUserScopeIds.length,
+      assetUserScopeIds,
+      applied: result,
+    });
+
+    return result;
   }
 
   //------------------------------
@@ -1172,6 +1328,7 @@ export class AssetService {
     const scopeQueryOptions = await this.resolveUserScopeQueryOptions(
       user,
       userRoles,
+      'searchUserScope',
     );
 
     const elasticQuery: Record<string, any>[] = [{ term: { archived: false } }];
@@ -1839,6 +1996,7 @@ export class AssetService {
     const scopeQueryOptions = await this.resolveUserScopeQueryOptions(
       user,
       userRoles,
+      'reportUserScopeFile',
     );
 
     const elasticQuery: Record<string, any>[] = [{ term: { archived: false } }];
@@ -2445,6 +2603,7 @@ export class AssetService {
     const scopeQueryOptions = await this.resolveUserScopeQueryOptions(
       user,
       userRoles,
+      'reportUserScope',
     );
 
     const elasticQuery: Record<string, any>[] = [];
@@ -3020,33 +3179,69 @@ export class AssetService {
   //------------------------------
   private async fetchEmployeesInternal(
     params: Record<string, unknown> = {},
+    traceId?: string,
   ): Promise<any[]> {
+    const logTraceId = traceId || this.createUserScopeTraceId();
     const { IDP_SERVICE_INTERNAL_TOKEN, IDP_SERVICE_URL } =
       await this.getIdpConfig();
+    const url = `${IDP_SERVICE_URL}/idp/api/v1/auth/get-all-employees-internal-without-paginate`;
+    const requestParams = { GetInternalUsers: true, ...params };
 
-    const { data } = await axios.get(
-      `${IDP_SERVICE_URL}/idp/api/v1/auth/get-all-employees-internal-without-paginate`,
-      {
-        params: { GetInternalUsers: true, ...params },
+    this.logUserScope(logTraceId, 'idp.employees.request', {
+      url,
+      params: requestParams,
+    });
+
+    const startedAt = Date.now();
+    try {
+      const { data, status } = await axios.get(url, {
+        params: requestParams,
         headers: {
           'x-internal-communication-token': IDP_SERVICE_INTERNAL_TOKEN,
           accept: '*/*',
         },
-      },
-    );
-
-    return this.unwrapEmployeeList(data);
+      });
+      const employees = this.unwrapEmployeeList(data);
+      this.logUserScope(logTraceId, 'idp.employees.response', {
+        url,
+        params: requestParams,
+        status,
+        durationMs: Date.now() - startedAt,
+        payloadShape: this.describePayloadShape(data),
+        employees: this.summarizeEmployees(employees),
+      });
+      return employees;
+    } catch (error: any) {
+      this.logUserScope(logTraceId, 'idp.employees.error', {
+        url,
+        params: requestParams,
+        durationMs: Date.now() - startedAt,
+        status: error?.response?.status,
+        message: error?.message,
+      });
+      throw error;
+    }
   }
 
   //------------------------------
-  private async resolveEmployeesToUserIds(employees: any[]): Promise<string[]> {
+  private async resolveEmployeesToUserIds(
+    employees: any[],
+    traceId?: string,
+  ): Promise<string[]> {
+    const logTraceId = traceId || this.createUserScopeTraceId();
     const ids = new Set<string>();
     const employeeIdsToResolve = new Set<string>();
+    let extractedCount = 0;
+
+    this.logUserScope(logTraceId, 'resolve-ids.start', {
+      employees: this.summarizeEmployees(employees),
+    });
 
     for (const employee of employees) {
       const scopeId = this.extractEmployeeScopeId(employee);
       if (scopeId) {
         ids.add(scopeId);
+        extractedCount += 1;
         continue;
       }
 
@@ -3056,19 +3251,32 @@ export class AssetService {
       }
     }
 
+    this.logUserScope(logTraceId, 'resolve-ids.extracted', {
+      extractedCount,
+      uniqueIdpUserIds: Array.from(ids),
+      missingIdpUserIdCount: employeeIdsToResolve.size,
+      employeeIdsToResolve: Array.from(employeeIdsToResolve),
+    });
+
     if (employeeIdsToResolve.size > 0) {
       const { IDP_SERVICE_INTERNAL_TOKEN, IDP_SERVICE_URL } =
         await this.getIdpConfig();
       const employeeIds = Array.from(employeeIdsToResolve);
       const CHUNK_SIZE = 10;
+      const url = `${IDP_SERVICE_URL}/idp/api/v1/users`;
 
       for (let i = 0; i < employeeIds.length; i += CHUNK_SIZE) {
         const chunk = employeeIds.slice(i, i + CHUNK_SIZE);
+        this.logUserScope(logTraceId, 'idp.users.request', {
+          url,
+          employeeIds: chunk,
+        });
+        const startedAt = Date.now();
         const resolved = await Promise.all(
           chunk.map(async (employeeId) => {
             try {
               const { data } = await axios.post(
-                `${IDP_SERVICE_URL}/idp/api/v1/users`,
+                url,
                 { domain: 'iranet', employeeId },
                 {
                   headers: {
@@ -3078,12 +3286,27 @@ export class AssetService {
                 },
               );
               const userId = this.normalizeHrmsId(data?.data?.id);
-              return userId && this.isUuid(userId) ? userId : undefined;
-            } catch {
+              const resolvedId =
+                userId && this.isUuid(userId) ? userId : undefined;
+              this.logUserScope(logTraceId, 'idp.users.response', {
+                employeeId,
+                resolvedUserId: resolvedId ?? null,
+              });
+              return resolvedId;
+            } catch (error: any) {
+              this.logUserScope(logTraceId, 'idp.users.error', {
+                employeeId,
+                status: error?.response?.status,
+                message: error?.message,
+              });
               return undefined;
             }
           }),
         );
+        this.logUserScope(logTraceId, 'idp.users.chunk-done', {
+          durationMs: Date.now() - startedAt,
+          resolvedCount: resolved.filter(Boolean).length,
+        });
 
         for (const userId of resolved) {
           if (userId) {
@@ -3093,32 +3316,58 @@ export class AssetService {
       }
     }
 
-    return Array.from(ids);
+    const result = Array.from(ids);
+    this.logUserScope(logTraceId, 'resolve-ids.done', {
+      count: result.length,
+      userIds: result,
+    });
+    return result;
   }
 
   //------------------------------
-  async getSubordinateUsers(username: string): Promise<string[]> {
+  async getSubordinateUsers(
+    username: string,
+    traceId?: string,
+  ): Promise<string[]> {
+    const logTraceId = traceId || this.createUserScopeTraceId();
+    this.logUserScope(logTraceId, 'subordinates.start', { username });
+
     const { IDP_SERVICE_INTERNAL_TOKEN, IDP_SERVICE_URL } =
       await this.getIdpConfig();
 
-    const currentUsers = await this.fetchEmployeesInternal({
-      ADUserName: this.toAdUserName(username),
-    });
+    const currentUsers = await this.fetchEmployeesInternal(
+      {
+        ADUserName: this.toAdUserName(username),
+      },
+      logTraceId,
+    );
     const currentUser = currentUsers[0];
 
     if (!currentUser) {
+      this.logUserScope(logTraceId, 'subordinates.current-user-missing', {
+        username,
+        adUserName: this.toAdUserName(username),
+      });
       throw new BadRequestException('User not found in IDP');
     }
 
     const userId = this.normalizeHrmsId(currentUser.EmployeeId);
+    this.logUserScope(logTraceId, 'subordinates.current-user', {
+      username,
+      currentUser: this.summarizeEmployees([currentUser]).people[0],
+      employeeId: userId ?? null,
+    });
     if (!userId) {
       throw new BadRequestException('EmployeeId not found for user');
     }
 
     let allUsers: any[] = [];
     try {
-      allUsers = await this.fetchEmployeesInternal();
-    } catch (error) {
+      allUsers = await this.fetchEmployeesInternal({}, logTraceId);
+    } catch (error: any) {
+      this.logUserScope(logTraceId, 'subordinates.all-employees-failed', {
+        message: error?.message,
+      });
       console.error(
         'Failed to fetch all employees for subordinate scope',
         error,
@@ -3126,23 +3375,45 @@ export class AssetService {
     }
 
     const currentDepartmentId = this.normalizeHrmsId(currentUser.DepartmentId);
+    this.logUserScope(logTraceId, 'subordinates.department-walk.start', {
+      currentDepartmentId: currentDepartmentId ?? null,
+    });
     const allDepartmentIds = currentDepartmentId
       ? await this.getAllSubordinateDepartmentIds(
           currentDepartmentId,
           IDP_SERVICE_URL,
           IDP_SERVICE_INTERNAL_TOKEN,
+          logTraceId,
         )
       : [];
+    this.logUserScope(logTraceId, 'subordinates.department-walk.done', {
+      departmentIds: allDepartmentIds,
+      count: allDepartmentIds.length,
+    });
 
     if (allUsers.length === 0 && allDepartmentIds.length > 0) {
+      this.logUserScope(logTraceId, 'subordinates.fallback-department-users', {
+        departmentIds: allDepartmentIds,
+      });
       allUsers = await this.getUsersFromDepartments(
         allDepartmentIds,
         IDP_SERVICE_URL,
         IDP_SERVICE_INTERNAL_TOKEN,
+        logTraceId,
       );
     }
 
-    const managedUsers = this.getAllManagedUsers(userId, allUsers);
+    const managedUsers = this.getAllManagedUsers(
+      userId,
+      allUsers,
+      logTraceId,
+    );
+    this.logUserScope(logTraceId, 'subordinates.reporting-line', {
+      managerEmployeeId: userId,
+      inputUserCount: allUsers.length,
+      managedUsers: this.summarizeEmployees(managedUsers, 200),
+    });
+
     const departmentIdSet = new Set(
       allDepartmentIds
         .map((id) => this.normalizeHrmsId(id))
@@ -3152,11 +3423,20 @@ export class AssetService {
       const departmentId = this.normalizeHrmsId(employee?.DepartmentId);
       return !!departmentId && departmentIdSet.has(departmentId);
     });
+    this.logUserScope(logTraceId, 'subordinates.department-users', {
+      departmentUsers: this.summarizeEmployees(departmentUsers, 200),
+    });
 
-    return this.resolveEmployeesToUserIds([
-      ...managedUsers,
-      ...departmentUsers,
-    ]);
+    const result = await this.resolveEmployeesToUserIds(
+      [...managedUsers, ...departmentUsers],
+      logTraceId,
+    );
+    this.logUserScope(logTraceId, 'subordinates.done', {
+      username,
+      count: result.length,
+      userIds: result,
+    });
+    return result;
   }
 
   //------------------------------
@@ -3278,28 +3558,39 @@ export class AssetService {
   }
 
   //------------------------------
-  private async getCurrentUserIpdUser(username: string) {
+  private async getCurrentUserIpdUser(username: string, traceId?: string) {
+    const logTraceId = traceId || this.createUserScopeTraceId();
     const IDP_SERVICE_INTERNAL_TOKEN = await Vault.instance.get(
       'IDP_SERVICE_INTERNAL_TOKEN',
       'share',
     );
     const IDP_SERVICE_URL = await Vault.instance.get('IDP_SERVICE_URL');
+    const url = `${IDP_SERVICE_URL}/idp/api/v1/auth/get-all-employees-internal-without-paginate`;
+    const params = {
+      ADUserName: this.toAdUserName(username),
+      GetInternalUsers: true,
+    };
 
-    const { data } = await axios.get(
-      `${IDP_SERVICE_URL}/idp/api/v1/auth/get-all-employees-internal-without-paginate`,
-      {
-        params: {
-          ADUserName: this.toAdUserName(username),
-          GetInternalUsers: true,
-        },
-        headers: {
-          'x-internal-communication-token': IDP_SERVICE_INTERNAL_TOKEN,
-          accept: '*/*',
-        },
+    this.logUserScope(logTraceId, 'idp.current-user.request', { url, params });
+    const startedAt = Date.now();
+    const { data, status } = await axios.get(url, {
+      params,
+      headers: {
+        'x-internal-communication-token': IDP_SERVICE_INTERNAL_TOKEN,
+        accept: '*/*',
       },
-    );
+    });
+    const currentUser = this.unwrapEmployeeList(data)[0] ?? null;
+    this.logUserScope(logTraceId, 'idp.current-user.response', {
+      status,
+      durationMs: Date.now() - startedAt,
+      payloadShape: this.describePayloadShape(data),
+      currentUser: currentUser
+        ? this.summarizeEmployees([currentUser]).people[0]
+        : null,
+    });
 
-    return this.unwrapEmployeeList(data)[0] ?? null;
+    return currentUser;
   }
 
   //------------------------------
@@ -3307,32 +3598,52 @@ export class AssetService {
     departmentId: string,
     IDP_SERVICE_URL: string,
     IDP_SERVICE_INTERNAL_TOKEN: string,
+    traceId?: string,
   ): Promise<string[]> {
+    const logTraceId = traceId || this.createUserScopeTraceId();
     if (!departmentId?.trim()) {
+      this.logUserScope(logTraceId, 'departments.skip-empty-id', {});
       return [];
     }
 
     const visited = new Set<string>();
     const queue: string[] = [departmentId];
     visited.add(departmentId);
+    this.logUserScope(logTraceId, 'departments.start', { departmentId });
 
     while (queue.length > 0) {
       const currentLevel = [...queue];
       queue.length = 0;
 
       const fetchPromises = currentLevel.map(async (parentId) => {
+        const url = `${IDP_SERVICE_URL}/idp/api/v1/auth/get-downward-department-internal/${encodeURIComponent(parentId)}`;
+        this.logUserScope(logTraceId, 'idp.downward-department.request', {
+          url,
+          parentId,
+        });
+        const startedAt = Date.now();
         try {
-          const response = await axios.get(
-            `${IDP_SERVICE_URL}/idp/api/v1/auth/get-downward-department-internal/${encodeURIComponent(parentId)}`,
-            {
-              headers: {
-                'x-internal-communication-token': IDP_SERVICE_INTERNAL_TOKEN,
-                Accept: 'application/json',
-              },
+          const response = await axios.get(url, {
+            headers: {
+              'x-internal-communication-token': IDP_SERVICE_INTERNAL_TOKEN,
+              Accept: 'application/json',
             },
-          );
+          });
 
           const rawData = this.unwrapEmployeeList(response.data);
+          this.logUserScope(logTraceId, 'idp.downward-department.response', {
+            parentId,
+            status: response.status,
+            durationMs: Date.now() - startedAt,
+            payloadShape: this.describePayloadShape(response.data),
+            childCount: rawData.length,
+            children: rawData.slice(0, 40).map((dept: any) => ({
+              departmentId:
+                dept?.departmentId ?? dept?.DepartmentId ?? dept?.id ?? null,
+              departmentName:
+                dept?.departmentName ?? dept?.DepartmentName ?? null,
+            })),
+          });
 
           if (!Array.isArray(rawData) || rawData.length === 0) {
             return [];
@@ -3356,7 +3667,13 @@ export class AssetService {
           const newChildren = rawChildIds;
 
           return newChildren;
-        } catch (error) {
+        } catch (error: any) {
+          this.logUserScope(logTraceId, 'idp.downward-department.error', {
+            parentId,
+            durationMs: Date.now() - startedAt,
+            status: error?.response?.status,
+            message: error?.message,
+          });
           console.error(
             `Failed to fetch children for ${parentId}:`,
             error.message || error,
@@ -3375,6 +3692,10 @@ export class AssetService {
     }
 
     const result = Array.from(visited);
+    this.logUserScope(logTraceId, 'departments.done', {
+      count: result.length,
+      departmentIds: result,
+    });
     return result;
   }
 
@@ -3383,12 +3704,18 @@ export class AssetService {
     departmentIds: string[],
     IDP_SERVICE_URL: string,
     IDP_SERVICE_INTERNAL_TOKEN: string,
+    traceId?: string,
   ): Promise<any[]> {
+    const logTraceId = traceId || this.createUserScopeTraceId();
     if (!departmentIds || departmentIds.length === 0) {
+      this.logUserScope(logTraceId, 'department-users.skip-empty', {});
       return [];
     }
 
     const uniqueDeptIds = [...new Set(departmentIds)];
+    this.logUserScope(logTraceId, 'department-users.start', {
+      departmentIds: uniqueDeptIds,
+    });
 
     const CHUNK_SIZE = 5;
     const allUsers: any[] = [];
@@ -3397,20 +3724,38 @@ export class AssetService {
       const chunk = uniqueDeptIds.slice(i, i + CHUNK_SIZE);
 
       const promises = chunk.map(async (deptId) => {
+        const url = `${IDP_SERVICE_URL}/idp/api/v1/auth/get-all-employees-internal-without-paginate`;
+        const params = { DepartmentId: deptId, GetInternalUsers: true };
+        this.logUserScope(logTraceId, 'idp.department-employees.request', {
+          url,
+          params,
+        });
+        const startedAt = Date.now();
         try {
-          const { data: response } = await axios.get(
-            `${IDP_SERVICE_URL}/idp/api/v1/auth/get-all-employees-internal-without-paginate`,
-            {
-              params: { DepartmentId: deptId, GetInternalUsers: true },
-              headers: {
-                'x-internal-communication-token': IDP_SERVICE_INTERNAL_TOKEN,
-                accept: '*/*',
-              },
+          const { data: response, status } = await axios.get(url, {
+            params,
+            headers: {
+              'x-internal-communication-token': IDP_SERVICE_INTERNAL_TOKEN,
+              accept: '*/*',
             },
-          );
+          });
 
-          return this.unwrapEmployeeList(response);
-        } catch (err) {
+          const users = this.unwrapEmployeeList(response);
+          this.logUserScope(logTraceId, 'idp.department-employees.response', {
+            params,
+            status,
+            durationMs: Date.now() - startedAt,
+            payloadShape: this.describePayloadShape(response),
+            employees: this.summarizeEmployees(users),
+          });
+          return users;
+        } catch (err: any) {
+          this.logUserScope(logTraceId, 'idp.department-employees.error', {
+            params,
+            durationMs: Date.now() - startedAt,
+            status: err?.response?.status,
+            message: err?.message,
+          });
           console.log(err);
           return [];
         }
@@ -3421,6 +3766,10 @@ export class AssetService {
       allUsers.push(...flattened);
     }
 
+    this.logUserScope(logTraceId, 'department-users.done', {
+      count: allUsers.length,
+      employees: this.summarizeEmployees(allUsers, 80),
+    });
     return allUsers;
   }
 
@@ -3428,10 +3777,30 @@ export class AssetService {
   public async buildSupervisorScope(
     username: string,
     authenticatedUserId?: string,
+    traceId?: string,
   ): Promise<string[]> {
-    const currentUserInfo = await this.getCurrentUserIpdUser(username);
+    const logTraceId = traceId || this.createUserScopeTraceId();
+    this.logUserScope(logTraceId, 'supervisor-scope.start', {
+      username,
+      authenticatedUserId: authenticatedUserId ?? null,
+    });
+
+    const currentUserInfo = await this.getCurrentUserIpdUser(
+      username,
+      logTraceId,
+    );
     const currentUserIpdUserId = this.extractEmployeeScopeId(currentUserInfo);
-    const subordinateUsers = await this.getSubordinateUsers(username);
+    this.logUserScope(logTraceId, 'supervisor-scope.current-idp-user', {
+      currentUserIpdUserId: currentUserIpdUserId ?? null,
+      currentUser: currentUserInfo
+        ? this.summarizeEmployees([currentUserInfo]).people[0]
+        : null,
+    });
+
+    const subordinateUsers = await this.getSubordinateUsers(
+      username,
+      logTraceId,
+    );
     const authenticatedId = this.normalizeHrmsId(authenticatedUserId);
     const baseScope = [
       ...(authenticatedId && this.isUuid(authenticatedId)
@@ -3440,6 +3809,14 @@ export class AssetService {
       ...(currentUserIpdUserId ? [currentUserIpdUserId] : []),
       ...subordinateUsers,
     ];
+
+    const result = [...new Set(baseScope)];
+    this.logUserScope(logTraceId, 'supervisor-scope.done', {
+      username,
+      count: result.length,
+      userIds: result,
+    });
+    return result;
 
     // if (
     //   currentUserPositionId == HRMSPositions.Deputy ||
@@ -3474,25 +3851,46 @@ export class AssetService {
   public async buildAssetUserScope(
     username: string,
     authenticatedUserId?: string,
+    traceId?: string,
   ): Promise<string[]> {
-    const scopeIds = await this.getAssetUserScopeIds(username);
+    const logTraceId = traceId || this.createUserScopeTraceId();
+    this.logUserScope(logTraceId, 'asset-user-scope.start', {
+      username,
+      authenticatedUserId: authenticatedUserId ?? null,
+    });
+    const scopeIds = await this.getAssetUserScopeIds(username, logTraceId);
     const authenticatedId = this.normalizeHrmsId(authenticatedUserId);
 
-    if (authenticatedId && this.isUuid(authenticatedId)) {
-      return [...new Set([authenticatedId, ...scopeIds])];
-    }
+    const result =
+      authenticatedId && this.isUuid(authenticatedId)
+        ? [...new Set([authenticatedId, ...scopeIds])]
+        : scopeIds;
 
-    return scopeIds;
+    this.logUserScope(logTraceId, 'asset-user-scope.done', {
+      username,
+      count: result.length,
+      userIds: result,
+    });
+    return result;
   }
 
   //------------------------------
-  getAllManagedUsers(userId: string, allUsers: any[]): any[] {
+  getAllManagedUsers(
+    userId: string,
+    allUsers: any[],
+    traceId?: string,
+  ): any[] {
+    const logTraceId = traceId || this.createUserScopeTraceId();
     const normalizedUserId = this.normalizeHrmsId(userId);
     if (
       !Array.isArray(allUsers) ||
       allUsers.length === 0 ||
       !normalizedUserId
     ) {
+      this.logUserScope(logTraceId, 'managed-users.skip', {
+        managerEmployeeId: normalizedUserId ?? null,
+        inputUserCount: Array.isArray(allUsers) ? allUsers.length : 0,
+      });
       return [];
     }
 
@@ -3538,18 +3936,39 @@ export class AssetService {
       }
     }
 
+    this.logUserScope(logTraceId, 'managed-users.tree', {
+      managerEmployeeId: normalizedUserId,
+      inputUserCount: allUsers.length,
+      employeeMapSize: employeeMap.size,
+      managersWithReports: reportsMap.size,
+      directReportCount: directReports.length,
+      managedCount: managedUsers.length,
+      managedUsers: this.summarizeEmployees(managedUsers, 80),
+    });
+
     return managedUsers;
   }
 
   //------------------------------
-  async getAssetUserScopeIds(username: string): Promise<string[]> {
+  async getAssetUserScopeIds(
+    username: string,
+    traceId?: string,
+  ): Promise<string[]> {
+    const logTraceId = traceId || this.createUserScopeTraceId();
     try {
-      const currentUsers = await this.fetchEmployeesInternal({
-        ADUserName: this.toAdUserName(username),
-      });
+      this.logUserScope(logTraceId, 'asset-user-ids.start', { username });
+      const currentUsers = await this.fetchEmployeesInternal(
+        {
+          ADUserName: this.toAdUserName(username),
+        },
+        logTraceId,
+      );
       const currentUser = currentUsers[0];
 
       if (!currentUser) {
+        this.logUserScope(logTraceId, 'asset-user-ids.current-user-missing', {
+          username,
+        });
         throw new BadRequestException('User not found in IDP');
       }
 
@@ -3561,27 +3980,58 @@ export class AssetService {
       );
       const currentUserManagerId = this.normalizeHrmsId(currentUser.ManagerId);
 
+      this.logUserScope(logTraceId, 'asset-user-ids.current-user', {
+        currentUser: this.summarizeEmployees([currentUser]).people[0],
+        currentDepartmentId: currentDepartmentId ?? null,
+        currentUserEmployeeId: currentUserEmployeeId ?? null,
+        currentUserManagerId: currentUserManagerId ?? null,
+      });
+
       if (!currentDepartmentId) {
         throw new BadRequestException('Required user information not found');
       }
 
-      const departmentUsers = await this.fetchEmployeesInternal({
-        DepartmentId: currentDepartmentId,
-      });
+      const departmentUsers = await this.fetchEmployeesInternal(
+        {
+          DepartmentId: currentDepartmentId,
+        },
+        logTraceId,
+      );
       const managedUsers = currentUserEmployeeId
-        ? this.getAllManagedUsers(currentUserEmployeeId, departmentUsers)
+        ? this.getAllManagedUsers(
+            currentUserEmployeeId,
+            departmentUsers,
+            logTraceId,
+          )
         : [];
+      this.logUserScope(logTraceId, 'asset-user-ids.department-and-reports', {
+        departmentUsers: this.summarizeEmployees(departmentUsers, 80),
+        managedUsers: this.summarizeEmployees(managedUsers, 80),
+      });
 
       const scopeEmployees = [...departmentUsers, ...managedUsers, currentUser];
 
       if (currentUserManagerId) {
-        const managerUsers = await this.fetchEmployeesInternal({
-          EmployeeId: currentUserManagerId,
+        const managerUsers = await this.fetchEmployeesInternal(
+          {
+            EmployeeId: currentUserManagerId,
+          },
+          logTraceId,
+        );
+        this.logUserScope(logTraceId, 'asset-user-ids.manager', {
+          managerUsers: this.summarizeEmployees(managerUsers),
         });
         scopeEmployees.push(...managerUsers);
       }
 
-      const scopeIds = await this.resolveEmployeesToUserIds(scopeEmployees);
+      const scopeIds = await this.resolveEmployeesToUserIds(
+        scopeEmployees,
+        logTraceId,
+      );
+      this.logUserScope(logTraceId, 'asset-user-ids.done', {
+        count: scopeIds.length,
+        userIds: scopeIds,
+      });
       if (scopeIds.length === 0) {
         throw new BadRequestException('Required user information not found');
       }
@@ -3591,6 +4041,9 @@ export class AssetService {
       if (err instanceof BadRequestException) {
         throw err;
       }
+      this.logUserScope(logTraceId, 'asset-user-ids.error', {
+        message: (err as Error)?.message,
+      });
       console.log(err);
       throw new InternalServerErrorException('');
     }
@@ -3598,48 +4051,11 @@ export class AssetService {
 
   //------------------------------
   async getLastWeekAssetVersions(user: User | any, userRoles: Role[]) {
-    const hasAdministratorRole = userRoles.some(
-      (r) => r.name === AssetRoles.AssetAdministrator,
+    const queryOptions = await this.resolveUserScopeQueryOptions(
+      user,
+      userRoles,
+      'getLastWeekAssetVersions',
     );
-
-    let scopeEmployeeIds: string[] = [];
-    let assetUserScopeIds: string[] = [];
-    let hasSupervisor = false;
-    let shouldApplyUserScope = false;
-
-    if (!hasAdministratorRole) {
-      hasSupervisor = userRoles.some(
-        (role) => role.name === AssetRoles.AssetSupervisor,
-      );
-      if (hasSupervisor) {
-        scopeEmployeeIds = await this.buildSupervisorScope(
-          user.username,
-          user.id,
-        );
-      }
-
-      const hasAuditor = userRoles.some(
-        (role) => role.name === AssetRoles.AssetAuditor,
-      );
-      const hasAssetUser = userRoles.some(
-        (role) => role.name === AssetRoles.AssetUser,
-      );
-
-      const hasFullAccess = hasSupervisor || hasAuditor;
-      shouldApplyUserScope = hasAssetUser && !hasFullAccess;
-
-      if (shouldApplyUserScope) {
-        assetUserScopeIds = await this.buildAssetUserScope(
-          user.username,
-          user.id,
-        );
-      }
-    }
-
-    const queryOptions: GetFilteredAssetVersions = {
-      ...(shouldApplyUserScope && { assetUserScopeIds }),
-      ...(hasSupervisor && { supervisorEmployeeIds: scopeEmployeeIds }),
-    };
 
     return await this.assetVersionRepository.getLastWeekAssetVersions(
       queryOptions,
@@ -3648,48 +4064,11 @@ export class AssetService {
 
   //------------------------------
   async getAccessibleAssets(user: User | any, userRoles: Role[]) {
-    const hasAdministratorRole = userRoles.some(
-      (r) => r.name === AssetRoles.AssetAdministrator,
+    const queryOptions = await this.resolveUserScopeQueryOptions(
+      user,
+      userRoles,
+      'getAccessibleAssets',
     );
-
-    let scopeEmployeeIds: string[] = [];
-    let assetUserScopeIds: string[] = [];
-    let hasSupervisor = false;
-    let shouldApplyUserScope = false;
-
-    if (!hasAdministratorRole) {
-      hasSupervisor = userRoles.some(
-        (role) => role.name === AssetRoles.AssetSupervisor,
-      );
-      if (hasSupervisor) {
-        scopeEmployeeIds = await this.buildSupervisorScope(
-          user.username,
-          user.id,
-        );
-      }
-
-      const hasAuditor = userRoles.some(
-        (role) => role.name === AssetRoles.AssetAuditor,
-      );
-      const hasAssetUser = userRoles.some(
-        (role) => role.name === AssetRoles.AssetUser,
-      );
-
-      const hasFullAccess = hasSupervisor || hasAuditor;
-      shouldApplyUserScope = hasAssetUser && !hasFullAccess;
-
-      if (shouldApplyUserScope) {
-        assetUserScopeIds = await this.buildAssetUserScope(
-          user.username,
-          user.id,
-        );
-      }
-    }
-
-    const queryOptions: GetFilteredAssetVersions = {
-      ...(shouldApplyUserScope && { assetUserScopeIds }),
-      ...(hasSupervisor && { supervisorEmployeeIds: scopeEmployeeIds }),
-    };
 
     const accessibleCount =
       await this.assetVersionRepository.findAllWithFilterForDashboard(
@@ -3708,50 +4087,11 @@ export class AssetService {
 
   //------------------------------
   async getAccessibleAssetsByTypes(user: User | any, userRoles: Role[]) {
-    const hasAdministratorRole = userRoles.some(
-      (r) => r.name === AssetRoles.AssetAdministrator,
+    const queryOptions = await this.resolveUserScopeQueryOptions(
+      user,
+      userRoles,
+      'getAccessibleAssetsByTypes',
     );
-
-    let scopeEmployeeIds: string[] = [];
-    let assetUserScopeIds: string[] = [];
-    let hasSupervisor = false;
-    let shouldApplyUserScope = false;
-
-    if (!hasAdministratorRole) {
-      hasSupervisor = userRoles.some(
-        (role) => role.name === AssetRoles.AssetSupervisor,
-      );
-
-      if (hasSupervisor) {
-        scopeEmployeeIds = await this.buildSupervisorScope(
-          user.username,
-          user.id,
-        );
-      }
-
-      const hasAuditor = userRoles.some(
-        (role) => role.name === AssetRoles.AssetAuditor,
-      );
-
-      const hasAssetUser = userRoles.some(
-        (role) => role.name === AssetRoles.AssetUser,
-      );
-
-      const hasFullAccess = hasSupervisor || hasAuditor;
-      shouldApplyUserScope = hasAssetUser && !hasFullAccess;
-
-      if (shouldApplyUserScope) {
-        assetUserScopeIds = await this.buildAssetUserScope(
-          user.username,
-          user.id,
-        );
-      }
-    }
-
-    const queryOptions: GetFilteredAssetVersions = {
-      ...(shouldApplyUserScope && { assetUserScopeIds }),
-      ...(hasSupervisor && { supervisorEmployeeIds: scopeEmployeeIds }),
-    };
 
     const accessibleByAssetType =
       await this.assetVersionRepository.findGroupedByAssetTypeForDashboard(
@@ -3766,52 +4106,11 @@ export class AssetService {
     user: User | any,
     userRoles: Role[],
   ) {
-    const hasAdministratorRole = userRoles.some(
-      (r) => r.name === AssetRoles.AssetAdministrator,
+    const queryOptions = await this.resolveUserScopeQueryOptions(
+      user,
+      userRoles,
+      'getAccessibleAssetVersionResponsibilityCounts',
     );
-
-    let supervisorEmployeeIds: string[] = [];
-    let assetUserScopeIds: string[] = [];
-    let hasSupervisor = false;
-    let shouldApplyUserScope = false;
-
-    if (!hasAdministratorRole) {
-      hasSupervisor = userRoles.some(
-        (role) => role.name === AssetRoles.AssetSupervisor,
-      );
-
-      if (hasSupervisor) {
-        supervisorEmployeeIds = await this.buildSupervisorScope(
-          user.username,
-          user.id,
-        );
-      }
-
-      const hasAuditor = userRoles.some(
-        (role) => role.name === AssetRoles.AssetAuditor,
-      );
-
-      const hasAssetUser = userRoles.some(
-        (role) => role.name === AssetRoles.AssetUser,
-      );
-
-      const hasFullAccess = hasSupervisor || hasAuditor;
-      shouldApplyUserScope = hasAssetUser && !hasFullAccess;
-
-      if (shouldApplyUserScope) {
-        assetUserScopeIds = await this.buildAssetUserScope(
-          user.username,
-          user.id,
-        );
-      }
-    }
-
-    const queryOptions: GetFilteredAssetVersions = {
-      ...(shouldApplyUserScope && { assetUserScopeIds }),
-      ...(hasSupervisor && {
-        supervisorEmployeeIds: supervisorEmployeeIds,
-      }),
-    };
 
     return this.assetVersionRepository.findGroupedByResponsibilityForDashboard(
       queryOptions,
