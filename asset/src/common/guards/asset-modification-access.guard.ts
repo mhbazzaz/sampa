@@ -66,6 +66,7 @@ export class AssetModificationAccessGuard implements CanActivate {
     if (hasSupervisorRole) {
       const supervisorScopeIds = await this.assetService.buildSupervisorScope(
         user.username,
+        user.id,
       );
 
       const hasAccess =
@@ -84,6 +85,7 @@ export class AssetModificationAccessGuard implements CanActivate {
 
       const assetUserScopeIds = await this.assetService.buildAssetUserScope(
         user.username,
+        user.id,
       );
 
       const hasAccess =

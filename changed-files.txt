@@ -14,5 +14,7 @@ sampa/src/member/repositories/member.repository.ts — findIdentitiesByIds / fin
 ===================================================
 DARFA : 
 
-Asset service
-File service
+//Asset service
+//File service
+asset.service.ts
+asset-modification-access.guard.ts

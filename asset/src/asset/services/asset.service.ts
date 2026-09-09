@@ -76,6 +76,13 @@ export type searchBodyTag = searchBody & {
   tags?: string[];
 };
 
+type ExcelReportSheetState = {
+  worksheet: ExcelJS.Worksheet;
+  columnsReady: boolean;
+  keys: string[];
+  maxWidths: number[];
+};
+
 @Injectable()
 export class AssetService {
   constructor(
@@ -770,6 +777,7 @@ export class AssetService {
         } else if (hasSupervisorRole && user) {
           const supervisorScopeIds = await this.buildSupervisorScope(
             user.username,
+            user.id,
           );
           const hasAccess =
             (assetVersion.accountableId &&
@@ -788,6 +796,7 @@ export class AssetService {
           if (!isDirectlyResponsible) {
             const assetUserScopeIds = await this.buildAssetUserScope(
               user.username,
+              user.id,
             );
             const hasAccess =
               (assetVersion.accountableId &&
@@ -1115,7 +1124,10 @@ export class AssetService {
       );
 
       if (hasSupervisor) {
-        scopeEmployeeIds = await this.buildSupervisorScope(user.username);
+        scopeEmployeeIds = await this.buildSupervisorScope(
+          user.username,
+          user.id,
+        );
       }
 
       const hasAuditor = userRoles.some(
@@ -1129,8 +1141,19 @@ export class AssetService {
       shouldApplyUserScope = hasAssetUser && !hasFullAccess;
 
       if (shouldApplyUserScope) {
-        assetUserScopeIds = await this.buildAssetUserScope(user.username);
+        assetUserScopeIds = await this.buildAssetUserScope(
+          user.username,
+          user.id,
+        );
       }
+    }
+
+    if (
+      hasSupervisor &&
+      scopeEmployeeIds.length === 0 &&
+      typeof user?.id === 'string'
+    ) {
+      scopeEmployeeIds = [user.id];
     }
 
     return {
@@ -1427,6 +1450,385 @@ export class AssetService {
   }
 
   //------------------------------
+  formatReportColumnHeader(key: string): string {
+    return key
+      .replace(/[._]/g, ' ')
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  }
+
+  //------------------------------
+  private sanitizeExportFilename(name: string): string {
+    const safe = (name || 'asset-report')
+      .replace(/[\\/:*?"<>|]+/g, '-')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+    return safe || 'asset-report';
+  }
+
+  //------------------------------
+  private getExcelThinBorder(): Partial<ExcelJS.Borders> {
+    const edge: Partial<ExcelJS.Border> = {
+      style: 'thin',
+      color: { argb: 'FFD0D7DE' },
+    };
+    return { top: edge, left: edge, bottom: edge, right: edge };
+  }
+
+  //------------------------------
+  private isNumericReportValue(key: string, value: unknown): boolean {
+    if (/id|code|ref|phone|username|address/i.test(key)) {
+      return false;
+    }
+    if (typeof value === 'number') {
+      return Number.isFinite(value);
+    }
+    if (typeof value !== 'string') {
+      return false;
+    }
+    return /^-?\d+(\.\d+)?$/.test(value.trim());
+  }
+
+  //------------------------------
+  private isDateReportValue(value: unknown): boolean {
+    if (value instanceof Date) {
+      return !Number.isNaN(value.getTime());
+    }
+    if (typeof value !== 'string') {
+      return false;
+    }
+    return /^\d{4}-\d{2}-\d{2}(T|\s|$)/.test(value.trim());
+  }
+
+  //------------------------------
+  private coerceExcelCellValue(key: string, value: unknown): ExcelJS.CellValue {
+    if (value === null || value === undefined || value === '') {
+      return '';
+    }
+    if (typeof value === 'boolean') {
+      return value;
+    }
+    if (this.isDateReportValue(value)) {
+      return value instanceof Date ? value : new Date(String(value));
+    }
+    if (this.isNumericReportValue(key, value)) {
+      return typeof value === 'number' ? value : Number(value);
+    }
+    if (Array.isArray(value)) {
+      return value.join('; ');
+    }
+    if (typeof value === 'object') {
+      return JSON.stringify(value);
+    }
+    return String(value);
+  }
+
+  //------------------------------
+  private collectReportColumnKeys(
+    rows: Array<Record<string, unknown> | undefined>,
+  ): string[] {
+    const keys: string[] = [];
+    const seen = new Set<string>();
+    for (const row of rows) {
+      if (!row) {
+        continue;
+      }
+      for (const key of Object.keys(row)) {
+        if (!seen.has(key)) {
+          seen.add(key);
+          keys.push(key);
+        }
+      }
+    }
+    return keys;
+  }
+
+  //------------------------------
+  private collectElasticFilterRows(
+    elasticQuery: Record<string, any>[],
+  ): Array<{ label: string; value: string }> {
+    const rows: Array<{ label: string; value: string }> = [];
+    for (const element of elasticQuery) {
+      for (const kind of ['terms', 'match_phrase', 'match', 'range'] as const) {
+        if (!element[kind]) {
+          continue;
+        }
+        for (const [key, value] of Object.entries(element[kind])) {
+          rows.push({
+            label: this.formatReportColumnHeader(key),
+            value: Array.isArray(value) ? value.join(', ') : String(value),
+          });
+        }
+      }
+    }
+    return rows;
+  }
+
+  //------------------------------
+  private createExcelReportSheetState(
+    worksheet: ExcelJS.Worksheet,
+  ): ExcelReportSheetState {
+    return {
+      worksheet,
+      columnsReady: false,
+      keys: [],
+      maxWidths: [],
+    };
+  }
+
+  //------------------------------
+  private createExcelReportDataSheet(
+    workbook: ExcelJS.stream.xlsx.WorkbookWriter,
+    name: string,
+  ): ExcelJS.Worksheet {
+    return workbook.addWorksheet(name, {
+      views: [{ state: 'frozen', ySplit: 1, showGridLines: true }],
+      properties: { defaultRowHeight: 18 },
+    });
+  }
+
+  //------------------------------
+  private prepareExcelReportDataSheet(
+    worksheet: ExcelJS.Worksheet,
+    keys: string[],
+  ): number[] {
+    worksheet.columns = keys.map((key) => {
+      const header = this.formatReportColumnHeader(key);
+      return {
+        header,
+        key,
+        width: Math.min(48, Math.max(12, header.length + 4)),
+      };
+    });
+
+    const headerRow = worksheet.getRow(1);
+    headerRow.height = 22;
+    headerRow.font = {
+      bold: true,
+      color: { argb: 'FFFFFFFF' },
+      name: 'Calibri',
+      size: 11,
+    };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF1F4E79' },
+    };
+    headerRow.alignment = {
+      vertical: 'middle',
+      horizontal: 'center',
+      wrapText: true,
+    };
+    headerRow.eachCell((cell: ExcelJS.Cell) => {
+      cell.border = this.getExcelThinBorder();
+    });
+    headerRow.commit();
+
+    return keys.map((key) =>
+      Math.min(48, Math.max(12, this.formatReportColumnHeader(key).length + 4)),
+    );
+  }
+
+  //------------------------------
+  private styleExcelReportDataRow(
+    row: ExcelJS.Row,
+    keys: string[],
+    values: Record<string, unknown>,
+  ) {
+    const isAlt = row.number % 2 === 0;
+    row.font = { name: 'Calibri', size: 10 };
+    row.alignment = { vertical: 'middle', wrapText: true };
+    row.height = 18;
+
+    row.eachCell(
+      { includeEmpty: true },
+      (cell: ExcelJS.Cell, colNumber: number) => {
+        const key = keys[colNumber - 1] || '';
+        const raw = values[key];
+        cell.border = this.getExcelThinBorder();
+        cell.alignment = {
+          vertical: 'middle',
+          horizontal: this.isNumericReportValue(key, raw) ? 'right' : 'left',
+          wrapText: true,
+        };
+        if (isAlt) {
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFF7F9FC' },
+          };
+        }
+        if (this.isDateReportValue(raw)) {
+          cell.numFmt = 'yyyy-mm-dd hh:mm';
+        } else if (this.isNumericReportValue(key, raw)) {
+          const numericValue =
+            typeof cell.value === 'number' ? cell.value : Number(raw);
+          cell.numFmt = Number.isInteger(numericValue) ? '#,##0' : '#,##0.00';
+        }
+      },
+    );
+  }
+
+  //------------------------------
+  private updateExcelColumnWidths(
+    maxWidths: number[],
+    keys: string[],
+    values: Record<string, unknown>,
+  ) {
+    keys.forEach((key, index) => {
+      const cellText = String(this.coerceExcelCellValue(key, values[key]) ?? '');
+      maxWidths[index] = Math.min(
+        48,
+        Math.max(maxWidths[index] || 12, cellText.length + 2),
+      );
+    });
+  }
+
+  //------------------------------
+  private finalizeExcelReportDataSheet(state: ExcelReportSheetState) {
+    const { worksheet, keys, maxWidths } = state;
+    if (keys.length === 0) {
+      worksheet.getCell('A1').value = 'No records';
+      worksheet.getCell('A1').font = {
+        italic: true,
+        color: { argb: 'FF6B7280' },
+        name: 'Calibri',
+        size: 11,
+      };
+      worksheet.getColumn(1).width = 20;
+      return;
+    }
+
+    worksheet.columns.forEach((column: Partial<ExcelJS.Column>, index: number) => {
+      column.width = maxWidths[index] || 12;
+    });
+
+    const lastColumn = worksheet.getColumn(keys.length);
+    const lastRow = Math.max(worksheet.rowCount, 1);
+    if (lastColumn.letter) {
+      worksheet.autoFilter = {
+        from: 'A1',
+        to: `${lastColumn.letter}${lastRow}`,
+      };
+    }
+  }
+
+  //------------------------------
+  private writeExcelReportRows(
+    state: ExcelReportSheetState,
+    mappedData: Array<Record<string, unknown> | undefined>,
+  ) {
+    const rows = mappedData.filter(
+      (row): row is Record<string, unknown> => row !== undefined,
+    );
+    if (rows.length === 0) {
+      return;
+    }
+
+    if (!state.columnsReady) {
+      state.keys = this.collectReportColumnKeys(rows);
+      state.maxWidths = this.prepareExcelReportDataSheet(
+        state.worksheet,
+        state.keys,
+      );
+      state.columnsReady = true;
+    }
+
+    for (const element of rows) {
+      const normalized: Record<string, ExcelJS.CellValue> = {};
+      for (const key of state.keys) {
+        normalized[key] = this.coerceExcelCellValue(key, element[key]);
+      }
+      const row = state.worksheet.addRow(normalized);
+      this.styleExcelReportDataRow(row, state.keys, element);
+      this.updateExcelColumnWidths(state.maxWidths, state.keys, element);
+      row.commit();
+    }
+  }
+
+  //------------------------------
+  private async writeExcelReportInfoSheet(
+    workbook: ExcelJS.stream.xlsx.WorkbookWriter,
+    options: {
+      title: string;
+      rows: Array<{ label: string; value: string }>;
+    },
+  ) {
+    const sheet = workbook.addWorksheet('Info', {
+      properties: { defaultRowHeight: 18 },
+    });
+
+    sheet.mergeCells('A1:B1');
+    const titleCell = sheet.getCell('A1');
+    titleCell.value = options.title;
+    titleCell.font = {
+      bold: true,
+      name: 'Calibri',
+      size: 16,
+      color: { argb: 'FF1F4E79' },
+    };
+    titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
+    sheet.getRow(1).height = 28;
+
+    const headerRow = sheet.getRow(2);
+    headerRow.getCell(1).value = 'Field';
+    headerRow.getCell(2).value = 'Value';
+    headerRow.font = {
+      bold: true,
+      color: { argb: 'FFFFFFFF' },
+      name: 'Calibri',
+      size: 11,
+    };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF1F4E79' },
+    };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+    headerRow.eachCell((cell: ExcelJS.Cell) => {
+      cell.border = this.getExcelThinBorder();
+    });
+    headerRow.commit();
+
+    options.rows.forEach((item, index) => {
+      const row = sheet.getRow(index + 3);
+      row.getCell(1).value = item.label;
+      row.getCell(2).value = item.value;
+      row.font = { name: 'Calibri', size: 10 };
+      row.getCell(1).font = { name: 'Calibri', size: 10, bold: true };
+      row.getCell(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFEEF3F8' },
+      };
+      row.eachCell((cell: ExcelJS.Cell) => {
+        cell.border = this.getExcelThinBorder();
+        cell.alignment = { vertical: 'middle', wrapText: true };
+      });
+      row.commit();
+    });
+
+    const labelWidth = Math.min(
+      36,
+      Math.max(14, ...options.rows.map((row) => row.label.length + 4), 10),
+    );
+    const valueWidth = Math.min(
+      60,
+      Math.max(
+        24,
+        ...options.rows.map((row) => String(row.value).length + 4),
+        options.title.length + 4,
+      ),
+    );
+    sheet.getColumn(1).width = labelWidth;
+    sheet.getColumn(2).width = valueWidth;
+    sheet.commit();
+  }
+
+  //------------------------------
   async reportUserScopeFile(
     user: User,
     userRoles: Role[],
@@ -1546,28 +1948,76 @@ export class AssetService {
     let sqlPage = 1;
     const elasticsearchSize = 10000;
 
+    const exportFilename = this.sanitizeExportFilename(
+      assetType.name || 'asset-report',
+    );
+
     let stream: CsvFormatterStream<Row, Row> | undefined = undefined;
-    let worksheet: ExcelJS.Worksheet | undefined = undefined;
-    let worksheetInfo: ExcelJS.Worksheet | undefined = undefined;
     let workbook: ExcelJS.stream.xlsx.WorkbookWriter | undefined = undefined;
+    let excelSheetState: ExcelReportSheetState | undefined = undefined;
     if (type === 'csv') {
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename="data.csv"');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${exportFilename}.csv"`,
+      );
     } else if (type === 'xls') {
       res.setHeader(
         'Content-Type',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       );
-      res.setHeader('Content-Disposition', 'attachment; filename="data.xlsx"');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${exportFilename}.xlsx"`,
+      );
 
-      workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res });
-      worksheetInfo = workbook.addWorksheet('Info');
-      worksheet = workbook.addWorksheet('V1');
+      workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+        stream: res,
+        useStyles: true,
+      });
     }
 
     let csvHeadersSet = false;
+    let csvKeys: string[] = [];
     if (hasElasticSearch) {
       this.recursivelyFlatKeysOfSearch(elasticBody, '', elasticQuery);
+    }
+
+    if (type === 'xls' && workbook) {
+      const infoRows: Array<{ label: string; value: string }> = [
+        { label: 'Asset Type', value: assetType.name || '' },
+      ];
+      if (name) {
+        infoRows.push({ label: 'Name', value: name });
+      }
+      if (externalRefId) {
+        infoRows.push({ label: 'External Ref Id', value: externalRefId });
+      }
+      if (locationTypeId) {
+        const locationType = await this.locationTypeRepository.findOne({
+          where: { id: locationTypeId },
+        });
+        if (locationType) {
+          infoRows.push({ label: 'Location Type', value: locationType.name });
+        }
+      }
+      if (locationId) {
+        const location = await this.locationRepository.findOne({
+          where: { id: locationId },
+        });
+        if (location) {
+          infoRows.push({ label: 'Location', value: location.name });
+        }
+      }
+      infoRows.push(...this.collectElasticFilterRows(elasticQuery));
+
+      await this.writeExcelReportInfoSheet(workbook, {
+        title: assetType.name || 'Asset Report',
+        rows: infoRows,
+      });
+      excelSheetState = this.createExcelReportSheetState(
+        this.createExcelReportDataSheet(workbook, 'V1'),
+      );
     }
 
     const users: any = {};
@@ -1680,32 +2130,22 @@ export class AssetService {
       const mappedData = orderedAssets.map((data) =>
         data ? this.transformAssetToReport(data) : undefined,
       );
-      const columns: { header: string; key: string }[] = [];
-      const columnsArray: string[] = [];
 
-      for (let i = 0; i < mappedData.length; i++) {
-        const element = mappedData[i];
-        if (element !== undefined) {
-          if (type === 'csv') {
-            if (csvHeadersSet) {
-              stream!.write(element); // row is a plain object
-            } else {
-              for (const [key] of Object.entries(element)) {
-                columnsArray.push(key);
+      if (type === 'csv') {
+        if (csvHeadersSet) {
+          for (const element of mappedData) {
+            if (element) {
+              const displayRow: Record<string, unknown> = {};
+              for (const key of csvKeys) {
+                displayRow[this.formatReportColumnHeader(key)] =
+                  element[key] ?? '';
               }
-            }
-          } else if (type === 'xls') {
-            if (worksheet) {
-              for (const [key] of Object.entries(element)) {
-                columns.push({ header: key, key: key });
-              }
-              worksheet.columns = [
-                ...new Map(columns.map((item) => [item.key, item])).values(),
-              ];
-              worksheet.addRow(element);
+              stream!.write(displayRow);
             }
           }
         }
+      } else if (type === 'xls' && excelSheetState) {
+        this.writeExcelReportRows(excelSheetState, mappedData);
       }
 
       if (
@@ -1714,8 +2154,12 @@ export class AssetService {
       ) {
         if (type === 'csv') {
           if (!csvHeadersSet) {
+            csvKeys = this.collectReportColumnKeys(mappedData);
             stream = format({
-              headers: [...new Set(columnsArray)],
+              headers: csvKeys.map((key) => this.formatReportColumnHeader(key)),
+              writeBOM: true,
+              quoteHeaders: true,
+              quoteColumns: true,
             });
             stream.pipe(res);
             sqlPage = 1;
@@ -1724,7 +2168,7 @@ export class AssetService {
             stream!.end();
             return;
           }
-        } else if (type === 'xls' && workbook && worksheetInfo && worksheet) {
+        } else if (type === 'xls' && workbook && excelSheetState) {
           if (!assetType.assetTypeVersions) {
             throw new BadRequestException(
               this.i18nService.t('messages.ERROR_NOT_FOUND_PROPERTY', {
@@ -1738,174 +2182,20 @@ export class AssetService {
             assetTypeVersionId = assetType.assetTypeVersions[version].id;
 
             if (version !== assetType.assetTypeVersions?.length) {
+              this.finalizeExcelReportDataSheet(excelSheetState);
+              excelSheetState.worksheet.commit();
               version++;
-              worksheet = workbook.addWorksheet(`V${version}`);
+              excelSheetState = this.createExcelReportSheetState(
+                this.createExcelReportDataSheet(workbook, `V${version}`),
+              );
               elasticsearchPage = 1;
               sqlPage = 1;
               continue;
             }
           }
 
-          worksheetInfo.getCell('A1').value = {
-            richText: [
-              {
-                font: { italic: true, size: 42, bold: true },
-                text: assetType?.name || '',
-              },
-            ],
-          };
-
-          let row = 2;
-          if (assetTypeVersionId) {
-            const assetTypeVersion =
-              await this.assetTypeVersionRepository.findOne({
-                where: { id: assetTypeVersionId },
-              });
-
-            worksheetInfo.getCell('A' + row).value = {
-              richText: [{ text: 'version' }],
-            };
-
-            worksheetInfo.getCell('B' + row).value = {
-              richText: [{ text: assetTypeVersion?.version.toString() || '' }],
-            };
-            row++;
-          }
-          if (name) {
-            worksheetInfo.getCell('A' + row).value = {
-              richText: [{ text: 'name' }],
-            };
-            worksheetInfo.getCell('B' + row).value = {
-              richText: [{ text: name }],
-            };
-            row++;
-          }
-          if (externalRefId) {
-            worksheetInfo.getCell('A' + row).value = {
-              richText: [{ text: 'externalRefId' }],
-            };
-            worksheetInfo.getCell('B' + row).value = {
-              richText: [{ text: externalRefId }],
-            };
-            row++;
-          }
-          if (locationTypeId) {
-            const locationType = await this.locationTypeRepository.findOne({
-              where: { id: locationTypeId },
-            });
-            if (locationType) {
-              worksheetInfo.getCell('A' + row).value = {
-                richText: [{ text: 'locationType' }],
-              };
-              worksheetInfo.getCell('B' + row).value = {
-                richText: [{ text: locationType.name }],
-              };
-              row++;
-            }
-          }
-          if (locationId) {
-            const location = await this.locationRepository.findOne({
-              where: { id: locationId },
-            });
-            if (location) {
-              worksheetInfo.getCell('A' + row).value = {
-                richText: [{ text: 'location' }],
-              };
-              worksheetInfo.getCell('B' + row).value = {
-                richText: [{ text: location.name }],
-              };
-              row++;
-            }
-          }
-
-          if (elasticQuery.length !== 1) {
-            for (let i = 0; i < elasticQuery.length; i++) {
-              const element = elasticQuery[i];
-              if (element.terms) {
-                for (const [key, value] of Object.entries(element.terms)) {
-                  worksheetInfo.getCell('A' + row).value = {
-                    richText: [{ text: key }],
-                  };
-                  worksheetInfo.getCell('B' + row).value = {
-                    richText: [
-                      {
-                        text: Array.isArray(value)
-                          ? value.join(', ')
-                          : (value as string),
-                      },
-                    ],
-                  };
-                  row++;
-                }
-              }
-              if (element.match_phrase) {
-                for (const [key, value] of Object.entries(
-                  element.match_phrase,
-                )) {
-                  worksheetInfo.getCell('A' + row).value = {
-                    richText: [{ text: key }],
-                  };
-                  worksheetInfo.getCell('B' + row).value = {
-                    richText: [
-                      {
-                        text: Array.isArray(value)
-                          ? value.join(', ')
-                          : (value as string),
-                      },
-                    ],
-                  };
-                  row++;
-                }
-              }
-              if (element.match) {
-                for (const [key, value] of Object.entries(element.match)) {
-                  worksheetInfo.getCell('A' + row).value = {
-                    richText: [{ text: key }],
-                  };
-                  worksheetInfo.getCell('B' + row).value = {
-                    richText: [
-                      {
-                        text: Array.isArray(value)
-                          ? value.join(', ')
-                          : (value as string),
-                      },
-                    ],
-                  };
-                  row++;
-                }
-              }
-              if (element.range) {
-                for (const [key, value] of Object.entries(element.range)) {
-                  worksheetInfo.getCell('A' + row).value = {
-                    richText: [{ text: key }],
-                  };
-                  worksheetInfo.getCell('B' + row).value = {
-                    richText: [
-                      {
-                        text: Array.isArray(value)
-                          ? value.join(', ')
-                          : (value as string),
-                      },
-                    ],
-                  };
-                  row++;
-                }
-              }
-            }
-          }
-
-          worksheetInfo.columns.forEach((column) => {
-            const lengths = column.values?.map((v) => v?.toString().length);
-            if (lengths) {
-              const maxLength = Math.max(
-                ...lengths.filter((v) => typeof v === 'number'),
-              );
-              column.width = maxLength;
-            }
-          });
-
-          worksheetInfo.commit();
-          worksheet.commit();
+          this.finalizeExcelReportDataSheet(excelSheetState);
+          excelSheetState.worksheet.commit();
           await workbook.commit();
           return;
         } else {
@@ -2656,17 +2946,88 @@ export class AssetService {
   }
 
   //------------------------------
-  async getSubordinateUsers(user: User | any) {
+  private normalizeHrmsId(id: unknown): string | undefined {
+    if (id === null || id === undefined) {
+      return undefined;
+    }
+
+    const value = String(id).trim();
+    return value.length > 0 ? value : undefined;
+  }
+
+  //------------------------------
+  private isUuid(value: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      value,
+    );
+  }
+
+  //------------------------------
+  unwrapEmployeeList(payload: unknown): any[] {
+    if (Array.isArray(payload)) {
+      return payload;
+    }
+
+    if (payload && typeof payload === 'object') {
+      const data = (payload as { data?: unknown }).data;
+      if (Array.isArray(data)) {
+        return data;
+      }
+      if (data && typeof data === 'object') {
+        const nested = (data as { data?: unknown }).data;
+        if (Array.isArray(nested)) {
+          return nested;
+        }
+      }
+    }
+
+    return [];
+  }
+
+  //------------------------------
+  extractEmployeeScopeId(employee: any): string | undefined {
+    const candidates = [employee?.idpUserId, employee?.IdpUserId];
+
+    for (const candidate of candidates) {
+      const value = this.normalizeHrmsId(candidate);
+      if (value && this.isUuid(value)) {
+        return value;
+      }
+    }
+
+    return undefined;
+  }
+
+  //------------------------------
+  private toAdUserName(username: string): string {
+    if (!username) {
+      return username;
+    }
+
+    return username.includes('\\') ? username : `iranet\\${username}`;
+  }
+
+  //------------------------------
+  private async getIdpConfig() {
     const IDP_SERVICE_INTERNAL_TOKEN = await Vault.instance.get(
       'IDP_SERVICE_INTERNAL_TOKEN',
       'share',
     );
     const IDP_SERVICE_URL = await Vault.instance.get('IDP_SERVICE_URL');
+    return { IDP_SERVICE_INTERNAL_TOKEN, IDP_SERVICE_URL };
+  }
 
-    const { data: userData } = await axios.get(
+  //------------------------------
+  private async fetchEmployeesInternal(
+    params: Record<string, unknown> = {},
+  ): Promise<any[]> {
+    const { IDP_SERVICE_INTERNAL_TOKEN, IDP_SERVICE_URL } =
+      await this.getIdpConfig();
+
+    const { data } = await axios.get(
       `${IDP_SERVICE_URL}/idp/api/v1/auth/get-all-employees-internal-without-paginate`,
       {
-        params: { ADUserName: `iranet\\${user}`, GetInternalUsers: true },
+        params: { GetInternalUsers: true, ...params },
         headers: {
           'x-internal-communication-token': IDP_SERVICE_INTERNAL_TOKEN,
           accept: '*/*',
@@ -2674,34 +3035,128 @@ export class AssetService {
       },
     );
 
-    if (!userData?.data[0]) {
+    return this.unwrapEmployeeList(data);
+  }
+
+  //------------------------------
+  private async resolveEmployeesToUserIds(employees: any[]): Promise<string[]> {
+    const ids = new Set<string>();
+    const employeeIdsToResolve = new Set<string>();
+
+    for (const employee of employees) {
+      const scopeId = this.extractEmployeeScopeId(employee);
+      if (scopeId) {
+        ids.add(scopeId);
+        continue;
+      }
+
+      const employeeId = this.normalizeHrmsId(employee?.EmployeeId);
+      if (employeeId) {
+        employeeIdsToResolve.add(employeeId);
+      }
+    }
+
+    if (employeeIdsToResolve.size > 0) {
+      const { IDP_SERVICE_INTERNAL_TOKEN, IDP_SERVICE_URL } =
+        await this.getIdpConfig();
+      const employeeIds = Array.from(employeeIdsToResolve);
+      const CHUNK_SIZE = 10;
+
+      for (let i = 0; i < employeeIds.length; i += CHUNK_SIZE) {
+        const chunk = employeeIds.slice(i, i + CHUNK_SIZE);
+        const resolved = await Promise.all(
+          chunk.map(async (employeeId) => {
+            try {
+              const { data } = await axios.post(
+                `${IDP_SERVICE_URL}/idp/api/v1/users`,
+                { domain: 'iranet', employeeId },
+                {
+                  headers: {
+                    'x-internal-communication-token':
+                      IDP_SERVICE_INTERNAL_TOKEN,
+                  },
+                },
+              );
+              const userId = this.normalizeHrmsId(data?.data?.id);
+              return userId && this.isUuid(userId) ? userId : undefined;
+            } catch {
+              return undefined;
+            }
+          }),
+        );
+
+        for (const userId of resolved) {
+          if (userId) {
+            ids.add(userId);
+          }
+        }
+      }
+    }
+
+    return Array.from(ids);
+  }
+
+  //------------------------------
+  async getSubordinateUsers(username: string): Promise<string[]> {
+    const { IDP_SERVICE_INTERNAL_TOKEN, IDP_SERVICE_URL } =
+      await this.getIdpConfig();
+
+    const currentUsers = await this.fetchEmployeesInternal({
+      ADUserName: this.toAdUserName(username),
+    });
+    const currentUser = currentUsers[0];
+
+    if (!currentUser) {
       throw new BadRequestException('User not found in IDP');
     }
 
-    const currentUser = userData.data[0];
-    const userId = currentUser.EmployeeId;
+    const userId = this.normalizeHrmsId(currentUser.EmployeeId);
     if (!userId) {
       throw new BadRequestException('EmployeeId not found for user');
     }
 
-    const allDepartmentIds = await this.getAllSubordinateDepartmentIds(
-      currentUser.DepartmentId,
-      IDP_SERVICE_URL,
-      IDP_SERVICE_INTERNAL_TOKEN,
-    );
+    let allUsers: any[] = [];
+    try {
+      allUsers = await this.fetchEmployeesInternal();
+    } catch (error) {
+      console.error(
+        'Failed to fetch all employees for subordinate scope',
+        error,
+      );
+    }
 
-    const allUsers = await this.getUsersFromDepartments(
-      allDepartmentIds,
-      IDP_SERVICE_URL,
-      IDP_SERVICE_INTERNAL_TOKEN,
-    );
+    const currentDepartmentId = this.normalizeHrmsId(currentUser.DepartmentId);
+    const allDepartmentIds = currentDepartmentId
+      ? await this.getAllSubordinateDepartmentIds(
+          currentDepartmentId,
+          IDP_SERVICE_URL,
+          IDP_SERVICE_INTERNAL_TOKEN,
+        )
+      : [];
+
+    if (allUsers.length === 0 && allDepartmentIds.length > 0) {
+      allUsers = await this.getUsersFromDepartments(
+        allDepartmentIds,
+        IDP_SERVICE_URL,
+        IDP_SERVICE_INTERNAL_TOKEN,
+      );
+    }
 
     const managedUsers = this.getAllManagedUsers(userId, allUsers);
-    const managedUserIds = managedUsers
-      .map((u) => u.idpUserId)
-      .filter((id): id is string => !!id);
+    const departmentIdSet = new Set(
+      allDepartmentIds
+        .map((id) => this.normalizeHrmsId(id))
+        .filter((id): id is string => !!id),
+    );
+    const departmentUsers = allUsers.filter((employee) => {
+      const departmentId = this.normalizeHrmsId(employee?.DepartmentId);
+      return !!departmentId && departmentIdSet.has(departmentId);
+    });
 
-    return managedUserIds;
+    return this.resolveEmployeesToUserIds([
+      ...managedUsers,
+      ...departmentUsers,
+    ]);
   }
 
   //------------------------------
@@ -2833,7 +3288,10 @@ export class AssetService {
     const { data } = await axios.get(
       `${IDP_SERVICE_URL}/idp/api/v1/auth/get-all-employees-internal-without-paginate`,
       {
-        params: { ADUserName: `iranet\\${username}`, GetInternalUsers: true },
+        params: {
+          ADUserName: this.toAdUserName(username),
+          GetInternalUsers: true,
+        },
         headers: {
           'x-internal-communication-token': IDP_SERVICE_INTERNAL_TOKEN,
           accept: '*/*',
@@ -2841,7 +3299,7 @@ export class AssetService {
       },
     );
 
-    return data.data[0] ?? null;
+    return this.unwrapEmployeeList(data)[0] ?? null;
   }
 
   //------------------------------
@@ -2874,24 +3332,28 @@ export class AssetService {
             },
           );
 
-          const rawData = response.data?.data;
+          const rawData = this.unwrapEmployeeList(response.data);
 
-          if (!Array.isArray(rawData)) {
+          if (!Array.isArray(rawData) || rawData.length === 0) {
             return [];
           }
 
-          const rawChildIds = rawData.map((dept: any) => dept?.departmentId);
-          const newChildren = rawChildIds.filter(
-            (id: unknown): id is string => {
-              if (typeof id !== 'string' || id.trim() === '') {
+          const rawChildIds = rawData
+            .map((dept: any) =>
+              this.normalizeHrmsId(
+                dept?.departmentId ?? dept?.DepartmentId ?? dept?.id,
+              ),
+            )
+            .filter((id: string | undefined): id is string => {
+              if (!id) {
                 return false;
               }
               if (visited.has(id)) {
                 return false;
               }
               return true;
-            },
-          );
+            });
+          const newChildren = rawChildIds;
 
           return newChildren;
         } catch (error) {
@@ -2947,8 +3409,7 @@ export class AssetService {
             },
           );
 
-          const users = response?.data || [];
-          return users;
+          return this.unwrapEmployeeList(response);
         } catch (err) {
           console.log(err);
           return [];
@@ -2964,13 +3425,21 @@ export class AssetService {
   }
 
   //------------------------------
-  public async buildSupervisorScope(username: string): Promise<string[]> {
+  public async buildSupervisorScope(
+    username: string,
+    authenticatedUserId?: string,
+  ): Promise<string[]> {
     const currentUserInfo = await this.getCurrentUserIpdUser(username);
-    const currentUserIpdUserId = currentUserInfo.idpUserId;
-    // const currentUserPositionId = currentUserInfo.PositionId;
-
+    const currentUserIpdUserId = this.extractEmployeeScopeId(currentUserInfo);
     const subordinateUsers = await this.getSubordinateUsers(username);
-    const baseScope = [currentUserIpdUserId, ...subordinateUsers];
+    const authenticatedId = this.normalizeHrmsId(authenticatedUserId);
+    const baseScope = [
+      ...(authenticatedId && this.isUuid(authenticatedId)
+        ? [authenticatedId]
+        : []),
+      ...(currentUserIpdUserId ? [currentUserIpdUserId] : []),
+      ...subordinateUsers,
+    ];
 
     // if (
     //   currentUserPositionId == HRMSPositions.Deputy ||
@@ -3002,13 +3471,28 @@ export class AssetService {
   }
 
   //------------------------------
-  public async buildAssetUserScope(username: string): Promise<string[]> {
-    return await this.getAssetUserScopeIds(username);
+  public async buildAssetUserScope(
+    username: string,
+    authenticatedUserId?: string,
+  ): Promise<string[]> {
+    const scopeIds = await this.getAssetUserScopeIds(username);
+    const authenticatedId = this.normalizeHrmsId(authenticatedUserId);
+
+    if (authenticatedId && this.isUuid(authenticatedId)) {
+      return [...new Set([authenticatedId, ...scopeIds])];
+    }
+
+    return scopeIds;
   }
 
   //------------------------------
   getAllManagedUsers(userId: string, allUsers: any[]): any[] {
-    if (!Array.isArray(allUsers) || allUsers.length === 0 || !userId) {
+    const normalizedUserId = this.normalizeHrmsId(userId);
+    if (
+      !Array.isArray(allUsers) ||
+      allUsers.length === 0 ||
+      !normalizedUserId
+    ) {
       return [];
     }
 
@@ -3016,8 +3500,8 @@ export class AssetService {
     const reportsMap = new Map<string, any[]>();
 
     for (const user of allUsers) {
-      const empId = user.EmployeeId;
-      const mgrId = user.ManagerId;
+      const empId = this.normalizeHrmsId(user?.EmployeeId);
+      const mgrId = this.normalizeHrmsId(user?.ManagerId);
 
       if (empId) employeeMap.set(empId, user);
       if (mgrId) {
@@ -3030,9 +3514,9 @@ export class AssetService {
     const visited = new Set<string>();
     const queue: string[] = [];
 
-    const directReports = reportsMap.get(userId) || [];
+    const directReports = reportsMap.get(normalizedUserId) || [];
     for (const report of directReports) {
-      const id = report.EmployeeId;
+      const id = this.normalizeHrmsId(report?.EmployeeId);
       if (id && !visited.has(id)) {
         visited.add(id);
         queue.push(id);
@@ -3046,7 +3530,7 @@ export class AssetService {
 
       const theirReports = reportsMap.get(currentId) || [];
       for (const report of theirReports) {
-        const reportId = report.EmployeeId;
+        const reportId = this.normalizeHrmsId(report?.EmployeeId);
         if (reportId && !visited.has(reportId)) {
           visited.add(reportId);
           queue.push(reportId);
@@ -3059,82 +3543,54 @@ export class AssetService {
 
   //------------------------------
   async getAssetUserScopeIds(username: string): Promise<string[]> {
-    const IDP_SERVICE_INTERNAL_TOKEN = await Vault.instance.get(
-      'IDP_SERVICE_INTERNAL_TOKEN',
-      'share',
-    );
-    const IDP_SERVICE_URL = await Vault.instance.get('IDP_SERVICE_URL');
-
     try {
-      const { data: userData } = await axios.get(
-        `${IDP_SERVICE_URL}/idp/api/v1/auth/get-all-employees-internal-without-paginate`,
-        {
-          params: { ADUserName: `iranet\\${username}`, GetInternalUsers: true },
-          headers: {
-            'x-internal-communication-token': IDP_SERVICE_INTERNAL_TOKEN,
-            accept: '*/*',
-          },
-        },
-      );
+      const currentUsers = await this.fetchEmployeesInternal({
+        ADUserName: this.toAdUserName(username),
+      });
+      const currentUser = currentUsers[0];
 
-      if (!userData?.data[0]) {
+      if (!currentUser) {
         throw new BadRequestException('User not found in IDP');
       }
 
-      const currentUser = userData.data[0];
-      const currentDepartmentId = currentUser.DepartmentId;
-      const currentUserId = currentUser.idpUserId;
-      const currentUserManagerId = currentUser.ManagerId;
+      const currentDepartmentId = this.normalizeHrmsId(
+        currentUser.DepartmentId,
+      );
+      const currentUserEmployeeId = this.normalizeHrmsId(
+        currentUser.EmployeeId,
+      );
+      const currentUserManagerId = this.normalizeHrmsId(currentUser.ManagerId);
 
-      if (!currentDepartmentId || !currentUserId) {
+      if (!currentDepartmentId) {
         throw new BadRequestException('Required user information not found');
       }
 
-      const { data: departmentUsersData } = await axios.get(
-        `${IDP_SERVICE_URL}/idp/api/v1/auth/get-all-employees-internal-without-paginate`,
-        {
-          params: { DepartmentId: currentDepartmentId, GetInternalUsers: true },
-          headers: {
-            'x-internal-communication-token': IDP_SERVICE_INTERNAL_TOKEN,
-            accept: '*/*',
-          },
-        },
-      );
+      const departmentUsers = await this.fetchEmployeesInternal({
+        DepartmentId: currentDepartmentId,
+      });
+      const managedUsers = currentUserEmployeeId
+        ? this.getAllManagedUsers(currentUserEmployeeId, departmentUsers)
+        : [];
 
-      const departmentUsers = departmentUsersData?.data || [];
-      const departmentEmployeeIds = departmentUsers
-        .map((u: any) => u.idpUserId)
-        .filter((id: any): id is string => !!id);
+      const scopeEmployees = [...departmentUsers, ...managedUsers, currentUser];
 
-      let managerEmployeeId: string | undefined;
       if (currentUserManagerId) {
-        const { data: managerData } = await axios.get(
-          `${IDP_SERVICE_URL}/idp/api/v1/auth/get-all-employees-internal-without-paginate`,
-          {
-            params: {
-              EmployeeId: currentUserManagerId,
-              GetInternalUsers: true,
-            },
-            headers: {
-              'x-internal-communication-token': IDP_SERVICE_INTERNAL_TOKEN,
-              accept: '*/*',
-            },
-          },
-        );
-
-        if (managerData?.data[0]?.idpUserId) {
-          managerEmployeeId = managerData.data[0].idpUserId;
-        }
+        const managerUsers = await this.fetchEmployeesInternal({
+          EmployeeId: currentUserManagerId,
+        });
+        scopeEmployees.push(...managerUsers);
       }
 
-      const allEmployeeIds = new Set<string>([
-        currentUserId,
-        ...departmentEmployeeIds,
-        ...(managerEmployeeId ? [managerEmployeeId] : []),
-      ]);
+      const scopeIds = await this.resolveEmployeesToUserIds(scopeEmployees);
+      if (scopeIds.length === 0) {
+        throw new BadRequestException('Required user information not found');
+      }
 
-      return Array.from(allEmployeeIds);
+      return scopeIds;
     } catch (err) {
+      if (err instanceof BadRequestException) {
+        throw err;
+      }
       console.log(err);
       throw new InternalServerErrorException('');
     }
@@ -3156,7 +3612,10 @@ export class AssetService {
         (role) => role.name === AssetRoles.AssetSupervisor,
       );
       if (hasSupervisor) {
-        scopeEmployeeIds = await this.buildSupervisorScope(user.username);
+        scopeEmployeeIds = await this.buildSupervisorScope(
+          user.username,
+          user.id,
+        );
       }
 
       const hasAuditor = userRoles.some(
@@ -3170,7 +3629,10 @@ export class AssetService {
       shouldApplyUserScope = hasAssetUser && !hasFullAccess;
 
       if (shouldApplyUserScope) {
-        assetUserScopeIds = await this.buildAssetUserScope(user.username);
+        assetUserScopeIds = await this.buildAssetUserScope(
+          user.username,
+          user.id,
+        );
       }
     }
 
@@ -3200,7 +3662,10 @@ export class AssetService {
         (role) => role.name === AssetRoles.AssetSupervisor,
       );
       if (hasSupervisor) {
-        scopeEmployeeIds = await this.buildSupervisorScope(user.username);
+        scopeEmployeeIds = await this.buildSupervisorScope(
+          user.username,
+          user.id,
+        );
       }
 
       const hasAuditor = userRoles.some(
@@ -3214,7 +3679,10 @@ export class AssetService {
       shouldApplyUserScope = hasAssetUser && !hasFullAccess;
 
       if (shouldApplyUserScope) {
-        assetUserScopeIds = await this.buildAssetUserScope(user.username);
+        assetUserScopeIds = await this.buildAssetUserScope(
+          user.username,
+          user.id,
+        );
       }
     }
 
@@ -3255,7 +3723,10 @@ export class AssetService {
       );
 
       if (hasSupervisor) {
-        scopeEmployeeIds = await this.buildSupervisorScope(user.username);
+        scopeEmployeeIds = await this.buildSupervisorScope(
+          user.username,
+          user.id,
+        );
       }
 
       const hasAuditor = userRoles.some(
@@ -3270,7 +3741,10 @@ export class AssetService {
       shouldApplyUserScope = hasAssetUser && !hasFullAccess;
 
       if (shouldApplyUserScope) {
-        assetUserScopeIds = await this.buildAssetUserScope(user.username);
+        assetUserScopeIds = await this.buildAssetUserScope(
+          user.username,
+          user.id,
+        );
       }
     }
 
@@ -3307,7 +3781,10 @@ export class AssetService {
       );
 
       if (hasSupervisor) {
-        supervisorEmployeeIds = await this.buildSupervisorScope(user.username);
+        supervisorEmployeeIds = await this.buildSupervisorScope(
+          user.username,
+          user.id,
+        );
       }
 
       const hasAuditor = userRoles.some(
@@ -3322,7 +3799,10 @@ export class AssetService {
       shouldApplyUserScope = hasAssetUser && !hasFullAccess;
 
       if (shouldApplyUserScope) {
-        assetUserScopeIds = await this.buildAssetUserScope(user.username);
+        assetUserScopeIds = await this.buildAssetUserScope(
+          user.username,
+          user.id,
+        );
       }
     }
 

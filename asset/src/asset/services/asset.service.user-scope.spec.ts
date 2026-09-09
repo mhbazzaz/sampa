@@ -26,6 +26,13 @@ import { AssetRepository } from '../repositories/asset.repository';
 import { AssetService } from './asset.service';
 
 jest.mock('axios');
+jest.mock('fast-csv', () => ({
+  format: jest.fn(() => ({
+    pipe: jest.fn().mockReturnThis(),
+    write: jest.fn(),
+    end: jest.fn(),
+  })),
+}));
 jest.mock('src/vault/vault', () => ({
   Vault: {
     instance: {
@@ -106,6 +113,11 @@ describe('AssetService user scope authorization', () => {
       [mockAsset],
       1,
     ]);
+    mockAssetTypeRepository.findOne.mockResolvedValue({
+      id: 'type-1',
+      name: 'Laptop Type',
+      assetTypeVersions: [{ id: 'version-1', version: 1 }],
+    });
 
     (service as any).transformAssetToReport = jest
       .fn()
@@ -142,6 +154,7 @@ describe('AssetService user scope authorization', () => {
 
       expect((service as any).buildSupervisorScope).toHaveBeenCalledWith(
         'jane',
+        'user-1',
       );
       expect(
         assetVersionRepository.findAllPaginationWithFilter,
@@ -167,7 +180,10 @@ describe('AssetService user scope authorization', () => {
         mockBody as any,
       );
 
-      expect((service as any).buildAssetUserScope).toHaveBeenCalledWith('jane');
+      expect((service as any).buildAssetUserScope).toHaveBeenCalledWith(
+        'jane',
+        'user-1',
+      );
       expect(
         assetVersionRepository.findAllPaginationWithFilter,
       ).toHaveBeenCalledWith(
@@ -236,6 +252,7 @@ describe('AssetService user scope authorization', () => {
 
       expect((service as any).buildSupervisorScope).toHaveBeenCalledWith(
         'jane',
+        'user-1',
       );
       expect((service as any).buildAssetUserScope).not.toHaveBeenCalled();
       expect(
@@ -267,7 +284,10 @@ describe('AssetService user scope authorization', () => {
         mockBody as any,
       );
 
-      expect((service as any).buildAssetUserScope).toHaveBeenCalledWith('jane');
+      expect((service as any).buildAssetUserScope).toHaveBeenCalledWith(
+        'jane',
+        'user-1',
+      );
       expect((service as any).buildSupervisorScope).not.toHaveBeenCalled();
       expect(
         assetVersionRepository.findAllPaginationWithFilterForReport,
@@ -303,6 +323,7 @@ describe('AssetService user scope authorization', () => {
 
       expect((service as any).buildSupervisorScope).toHaveBeenCalledWith(
         'jane',
+        'user-1',
       );
       expect((service as any).buildAssetUserScope).not.toHaveBeenCalled();
       const queryOptions =
@@ -335,6 +356,242 @@ describe('AssetService user scope authorization', () => {
         ],
         count: 2,
       });
+    });
+  });
+
+  describe('reportUserScopeFile', () => {
+    const mockRes = { setHeader: jest.fn() } as any;
+
+    async function exportCsv(roles: Role[]) {
+      await service.reportUserScopeFile(
+        mockUser,
+        roles,
+        mockBody as any,
+        mockRes,
+        'csv',
+      );
+    }
+
+    it('does not apply scope filters for asset administrators', async () => {
+      await exportCsv([{ name: AssetRoles.AssetAdministrator }] as Role[]);
+
+      const queryOptions =
+        assetVersionRepository.findAllPaginationWithFilterForReport.mock
+          .calls[0][2];
+      expect(queryOptions.supervisorEmployeeIds).toBeUndefined();
+      expect(queryOptions.assetUserScopeIds).toBeUndefined();
+    });
+
+    it('does not apply scope filters for asset auditors', async () => {
+      (service as any).buildSupervisorScope = jest.fn();
+      (service as any).buildAssetUserScope = jest.fn();
+
+      await exportCsv([{ name: AssetRoles.AssetAuditor }] as Role[]);
+
+      expect((service as any).buildSupervisorScope).not.toHaveBeenCalled();
+      expect((service as any).buildAssetUserScope).not.toHaveBeenCalled();
+      const queryOptions =
+        assetVersionRepository.findAllPaginationWithFilterForReport.mock
+          .calls[0][2];
+      expect(queryOptions.supervisorEmployeeIds).toBeUndefined();
+      expect(queryOptions.assetUserScopeIds).toBeUndefined();
+    });
+
+    it('applies supervisor employee ids for asset supervisors', async () => {
+      (service as any).buildSupervisorScope = jest
+        .fn()
+        .mockResolvedValue(['emp-1', 'emp-2']);
+      (service as any).buildAssetUserScope = jest.fn();
+
+      await exportCsv([{ name: AssetRoles.AssetSupervisor }] as Role[]);
+
+      expect((service as any).buildSupervisorScope).toHaveBeenCalledWith(
+        'jane',
+        'user-1',
+      );
+      expect((service as any).buildAssetUserScope).not.toHaveBeenCalled();
+      expect(
+        assetVersionRepository.findAllPaginationWithFilterForReport,
+      ).toHaveBeenCalledWith(
+        undefined,
+        [],
+        expect.objectContaining({
+          supervisorEmployeeIds: ['emp-1', 'emp-2'],
+        }),
+        undefined,
+      );
+    });
+
+    it('applies asset user scope ids for asset users without full access', async () => {
+      (service as any).buildAssetUserScope = jest
+        .fn()
+        .mockResolvedValue(['user-1', 'dept-1']);
+      (service as any).buildSupervisorScope = jest.fn();
+
+      await exportCsv([{ name: AssetRoles.AssetUser }] as Role[]);
+
+      expect((service as any).buildAssetUserScope).toHaveBeenCalledWith(
+        'jane',
+        'user-1',
+      );
+      expect((service as any).buildSupervisorScope).not.toHaveBeenCalled();
+      expect(
+        assetVersionRepository.findAllPaginationWithFilterForReport,
+      ).toHaveBeenCalledWith(
+        undefined,
+        [],
+        expect.objectContaining({
+          assetUserScopeIds: ['user-1', 'dept-1'],
+        }),
+        undefined,
+      );
+    });
+
+    it('uses supervisor scope instead of asset user scope when both roles are present', async () => {
+      (service as any).buildSupervisorScope = jest
+        .fn()
+        .mockResolvedValue(['emp-1']);
+      (service as any).buildAssetUserScope = jest.fn();
+
+      await exportCsv([
+        { name: AssetRoles.AssetSupervisor },
+        { name: AssetRoles.AssetUser },
+      ] as Role[]);
+
+      expect((service as any).buildSupervisorScope).toHaveBeenCalledWith(
+        'jane',
+        'user-1',
+      );
+      expect((service as any).buildAssetUserScope).not.toHaveBeenCalled();
+      const queryOptions =
+        assetVersionRepository.findAllPaginationWithFilterForReport.mock
+          .calls[0][2];
+      expect(queryOptions.supervisorEmployeeIds).toEqual(['emp-1']);
+      expect(queryOptions.assetUserScopeIds).toBeUndefined();
+    });
+  });
+
+  describe('subordinate scope helpers', () => {
+    const supervisorUserId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    const reportUserId = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+    const nestedReportUserId = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+    const departmentPeerUserId = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+
+    it('matches nested reports even when ManagerId and EmployeeId types differ', () => {
+      const users = [
+        {
+          EmployeeId: 2,
+          ManagerId: 1,
+          idpUserId: reportUserId,
+        },
+        {
+          EmployeeId: '3',
+          ManagerId: '2',
+          idpUserId: nestedReportUserId,
+        },
+        {
+          EmployeeId: '4',
+          ManagerId: '99',
+          idpUserId: departmentPeerUserId,
+        },
+      ];
+
+      const managed = service.getAllManagedUsers('1', users);
+
+      expect(managed.map((user) => user.idpUserId)).toEqual([
+        reportUserId,
+        nestedReportUserId,
+      ]);
+    });
+
+    it('unwraps nested IDP employee payloads', () => {
+      expect(service.unwrapEmployeeList({ data: [{ EmployeeId: '1' }] })).toEqual(
+        [{ EmployeeId: '1' }],
+      );
+      expect(
+        service.unwrapEmployeeList({ data: { data: [{ EmployeeId: '1' }] } }),
+      ).toEqual([{ EmployeeId: '1' }]);
+      expect(service.unwrapEmployeeList([{ EmployeeId: '1' }])).toEqual([
+        { EmployeeId: '1' },
+      ]);
+    });
+
+    it('formats report column headers from content keys', () => {
+      expect(service.formatReportColumnHeader('externalRefId')).toBe(
+        'External Ref Id',
+      );
+      expect(service.formatReportColumnHeader('location_code')).toBe(
+        'Location Code',
+      );
+      expect(service.formatReportColumnHeader('content.ipAddress')).toBe(
+        'Content Ip Address',
+      );
+    });
+
+    it('extracts UUID ids used on accountable and responsible asset fields', () => {
+      expect(
+        service.extractEmployeeScopeId({
+          EmployeeId: '123',
+          idpUserId: supervisorUserId,
+        }),
+      ).toBe(supervisorUserId);
+      expect(service.extractEmployeeScopeId({ EmployeeId: '123' })).toBeUndefined();
+    });
+
+    it('returns reporting-line and department subordinate user ids', async () => {
+      (axios.get as jest.Mock).mockImplementation(
+        (url: string, config?: { params?: Record<string, unknown> }) => {
+          if (url.includes('get-downward-department')) {
+            return Promise.resolve({ data: { data: [] } });
+          }
+
+          const params = config?.params || {};
+          if (params.ADUserName) {
+            return Promise.resolve({
+              data: {
+                data: [
+                  {
+                    EmployeeId: '1',
+                    DepartmentId: 'd1',
+                    idpUserId: supervisorUserId,
+                    ManagerId: null,
+                  },
+                ],
+              },
+            });
+          }
+
+          return Promise.resolve({
+            data: {
+              data: [
+                {
+                  EmployeeId: '1',
+                  DepartmentId: 'd1',
+                  idpUserId: supervisorUserId,
+                },
+                {
+                  EmployeeId: 2,
+                  DepartmentId: 'd1',
+                  ManagerId: '1',
+                  idpUserId: reportUserId,
+                },
+                {
+                  EmployeeId: '3',
+                  DepartmentId: 'd1',
+                  ManagerId: '99',
+                  idpUserId: departmentPeerUserId,
+                },
+              ],
+            },
+          });
+        },
+      );
+
+      const ids = await service.getSubordinateUsers('jane');
+
+      expect(ids).toEqual(
+        expect.arrayContaining([reportUserId, departmentPeerUserId]),
+      );
     });
   });
 });
