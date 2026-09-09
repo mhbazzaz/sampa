@@ -1094,12 +1094,12 @@ export class AssetService {
   }
 
   //------------------------------
-  async searchUserScope(
+  private async resolveUserScopeQueryOptions(
     user: User | any,
     userRoles: Role[],
-    query: findAllAssetReportQueryDto,
-    body: searchBodyTag,
-  ) {
+  ): Promise<
+    Pick<FindAllAssetQueryDto, 'assetUserScopeIds' | 'supervisorEmployeeIds'>
+  > {
     const hasAdministratorRole = userRoles.some(
       (r) => r.name === AssetRoles.AssetAdministrator,
     );
@@ -1132,6 +1132,24 @@ export class AssetService {
         assetUserScopeIds = await this.buildAssetUserScope(user.username);
       }
     }
+
+    return {
+      ...(shouldApplyUserScope && { assetUserScopeIds }),
+      ...(hasSupervisor && { supervisorEmployeeIds: scopeEmployeeIds }),
+    };
+  }
+
+  //------------------------------
+  async searchUserScope(
+    user: User | any,
+    userRoles: Role[],
+    query: findAllAssetReportQueryDto,
+    body: searchBodyTag,
+  ) {
+    const scopeQueryOptions = await this.resolveUserScopeQueryOptions(
+      user,
+      userRoles,
+    );
 
     const elasticQuery: Record<string, any>[] = [{ term: { archived: false } }];
     const {
@@ -1254,8 +1272,7 @@ export class AssetService {
             ? assetTypeVersionId
             : undefined,
         assetTypeId: typeof assetTypeId === 'string' ? assetTypeId : undefined,
-        ...(shouldApplyUserScope && { assetUserScopeIds }),
-        ...(hasSupervisor && { supervisorEmployeeIds: scopeEmployeeIds }),
+        ...scopeQueryOptions,
       };
 
       if (ids === undefined || ids.length > 0) {
@@ -1417,6 +1434,11 @@ export class AssetService {
     res: Response,
     type: 'csv' | 'xls' | 'pdf',
   ) {
+    const scopeQueryOptions = await this.resolveUserScopeQueryOptions(
+      user,
+      userRoles,
+    );
+
     const elasticQuery: Record<string, any>[] = [{ term: { archived: false } }];
     const {
       tags,
@@ -1587,6 +1609,7 @@ export class AssetService {
         assetTypeId: typeof assetTypeId === 'string' ? assetTypeId : undefined,
         take: 10000,
         skip: 10000 * (sqlPage - 1),
+        ...scopeQueryOptions,
       };
       sqlPage++;
 
@@ -2129,6 +2152,11 @@ export class AssetService {
     query: findAllAssetReportQueryDto,
     body: assetSearchBodyReportDto,
   ) {
+    const scopeQueryOptions = await this.resolveUserScopeQueryOptions(
+      user,
+      userRoles,
+    );
+
     const elasticQuery: Record<string, any>[] = [];
     const {
       tags,
@@ -2253,6 +2281,7 @@ export class AssetService {
             ? assetTypeVersionId
             : undefined,
         assetTypeId: typeof assetTypeId === 'string' ? assetTypeId : undefined,
+        ...scopeQueryOptions,
       };
 
       if (ids === undefined || ids.length > 0) {
