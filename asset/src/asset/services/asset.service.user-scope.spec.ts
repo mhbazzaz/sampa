@@ -37,8 +37,8 @@ jest.mock('src/vault/vault', () => ({
 
 const mockUser = { id: 'user-1', username: 'jane' } as any;
 const mockQuery: findAllAssetReportQueryDto = { skip: 0, take: 10 };
-const mockBody = {
-  tags: [],
+const mockBody: Record<string, unknown> = {
+  tags: [] as string[],
   assetTypeId: 'type-1',
   assetTypeVersionId: 'version-1',
 };
@@ -99,9 +99,9 @@ describe('AssetService user scope authorization', () => {
     (axios.post as jest.Mock).mockReset();
     (axios.get as jest.Mock).mockReset();
 
-    FAKESECRET_o2p3q4r5s6t7u8v9w0x1(
-      [[mockAsset], 1],
-    );
+    const reportQuery =
+      assetVersionRepository.findAllPaginationWithFilterForReport;
+    reportQuery.mockResolvedValue([[mockAsset], 1]);
     assetVersionRepository.findAllPaginationWithFilter.mockResolvedValue([
       [mockAsset],
       1,
@@ -118,7 +118,7 @@ describe('AssetService user scope authorization', () => {
         mockUser,
         [{ name: AssetRoles.AssetAdministrator }] as Role[],
         mockQuery,
-        mockBody,
+        mockBody as any,
       );
 
       const queryOptions =
@@ -137,13 +137,15 @@ describe('AssetService user scope authorization', () => {
         mockUser,
         [{ name: AssetRoles.AssetSupervisor }] as Role[],
         mockQuery,
-        mockBody,
+        mockBody as any,
       );
 
       expect((service as any).buildSupervisorScope).toHaveBeenCalledWith(
         'jane',
       );
-      expect(assetVersionRepository.findAllPaginationWithFilter).toHaveBeenCalledWith(
+      expect(
+        assetVersionRepository.findAllPaginationWithFilter,
+      ).toHaveBeenCalledWith(
         undefined,
         [],
         expect.objectContaining({
@@ -162,11 +164,13 @@ describe('AssetService user scope authorization', () => {
         mockUser,
         [{ name: AssetRoles.AssetUser }] as Role[],
         mockQuery,
-        mockBody,
+        mockBody as any,
       );
 
       expect((service as any).buildAssetUserScope).toHaveBeenCalledWith('jane');
-      expect(assetVersionRepository.findAllPaginationWithFilter).toHaveBeenCalledWith(
+      expect(
+        assetVersionRepository.findAllPaginationWithFilter,
+      ).toHaveBeenCalledWith(
         undefined,
         [],
         expect.objectContaining({
@@ -310,9 +314,9 @@ describe('AssetService user scope authorization', () => {
 
     it('returns transformed report rows with the scoped result count', async () => {
       const secondAsset = { ...mockAsset, id: 'asset-2' };
-      FAKESECRET_o2p3q4r5s6t7u8v9w0x1(
-        [[mockAsset, secondAsset], 2],
-      );
+      const reportQuery =
+        assetVersionRepository.findAllPaginationWithFilterForReport;
+      reportQuery.mockResolvedValue([[mockAsset, secondAsset], 2]);
       (service as any).transformAssetToReport = jest
         .fn()
         .mockImplementation((asset) => ({ id: asset.id, name: 'Laptop' }));
