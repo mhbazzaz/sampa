@@ -1094,12 +1094,15 @@ export class AssetService {
   }
 
   //------------------------------
-  async searchUserScope(
+  async resolveUserScopeAuthorization(
     user: User | any,
     userRoles: Role[],
-    query: findAllAssetReportQueryDto,
-    body: searchBodyTag,
-  ) {
+  ): Promise<{
+    shouldApplyUserScope: boolean;
+    assetUserScopeIds: string[];
+    hasSupervisor: boolean;
+    scopeEmployeeIds: string[];
+  }> {
     const hasAdministratorRole = userRoles.some(
       (r) => r.name === AssetRoles.AssetAdministrator,
     );
@@ -1132,6 +1135,28 @@ export class AssetService {
         assetUserScopeIds = await this.buildAssetUserScope(user.username);
       }
     }
+
+    return {
+      shouldApplyUserScope,
+      assetUserScopeIds,
+      hasSupervisor,
+      scopeEmployeeIds,
+    };
+  }
+
+  //------------------------------
+  async searchUserScope(
+    user: User | any,
+    userRoles: Role[],
+    query: findAllAssetReportQueryDto,
+    body: searchBodyTag,
+  ) {
+    const {
+      shouldApplyUserScope,
+      assetUserScopeIds,
+      hasSupervisor,
+      scopeEmployeeIds,
+    } = await this.resolveUserScopeAuthorization(user, userRoles);
 
     const elasticQuery: Record<string, any>[] = [{ term: { archived: false } }];
     const {
@@ -1417,6 +1442,13 @@ export class AssetService {
     res: Response,
     type: 'csv' | 'xls' | 'pdf',
   ) {
+    const {
+      shouldApplyUserScope,
+      assetUserScopeIds,
+      hasSupervisor,
+      scopeEmployeeIds,
+    } = await this.resolveUserScopeAuthorization(user, userRoles);
+
     const elasticQuery: Record<string, any>[] = [{ term: { archived: false } }];
     const {
       tags,
@@ -1587,6 +1619,8 @@ export class AssetService {
         assetTypeId: typeof assetTypeId === 'string' ? assetTypeId : undefined,
         take: 10000,
         skip: 10000 * (sqlPage - 1),
+        ...(shouldApplyUserScope && { assetUserScopeIds }),
+        ...(hasSupervisor && { supervisorEmployeeIds: scopeEmployeeIds }),
       };
       sqlPage++;
 
@@ -2129,6 +2163,13 @@ export class AssetService {
     query: findAllAssetReportQueryDto,
     body: assetSearchBodyReportDto,
   ) {
+    const {
+      shouldApplyUserScope,
+      assetUserScopeIds,
+      hasSupervisor,
+      scopeEmployeeIds,
+    } = await this.resolveUserScopeAuthorization(user, userRoles);
+
     const elasticQuery: Record<string, any>[] = [];
     const {
       tags,
@@ -2253,6 +2294,8 @@ export class AssetService {
             ? assetTypeVersionId
             : undefined,
         assetTypeId: typeof assetTypeId === 'string' ? assetTypeId : undefined,
+        ...(shouldApplyUserScope && { assetUserScopeIds }),
+        ...(hasSupervisor && { supervisorEmployeeIds: scopeEmployeeIds }),
       };
 
       if (ids === undefined || ids.length > 0) {
