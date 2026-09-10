@@ -365,7 +365,11 @@ describe('AssetService user scope authorization', () => {
   });
 
   describe('reportUserScopeFile', () => {
-    const mockRes = { setHeader: jest.fn() } as any;
+    const mockRes = {
+      setHeader: jest.fn(),
+      write: jest.fn(),
+      end: jest.fn(),
+    } as any;
 
     async function exportCsv(roles: Role[]) {
       await service.reportUserScopeFile(
@@ -513,9 +517,9 @@ describe('AssetService user scope authorization', () => {
     });
 
     it('unwraps nested IDP employee payloads', () => {
-      expect(service.unwrapEmployeeList({ data: [{ EmployeeId: '1' }] })).toEqual(
-        [{ EmployeeId: '1' }],
-      );
+      expect(
+        service.unwrapEmployeeList({ data: [{ EmployeeId: '1' }] }),
+      ).toEqual([{ EmployeeId: '1' }]);
       expect(
         service.unwrapEmployeeList({ data: { data: [{ EmployeeId: '1' }] } }),
       ).toEqual([{ EmployeeId: '1' }]);
@@ -543,7 +547,9 @@ describe('AssetService user scope authorization', () => {
           idpUserId: supervisorUserId,
         }),
       ).toBe(supervisorUserId);
-      expect(service.extractEmployeeScopeId({ EmployeeId: '123' })).toBeUndefined();
+      expect(
+        service.extractEmployeeScopeId({ EmployeeId: '123' }),
+      ).toBeUndefined();
     });
 
     it('returns reporting-line and department subordinate user ids', async () => {
