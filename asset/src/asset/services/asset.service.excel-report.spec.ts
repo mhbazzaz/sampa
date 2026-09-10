@@ -238,4 +238,31 @@ describe('AssetService excel report styling', () => {
       'FF111827',
     );
   });
+
+  it('writes a CSV Info preamble that matches the Excel Info sheet layout', () => {
+    const chunks: string[] = [];
+    service.writeCsvReportPreamble(
+      { write: (chunk: string) => chunks.push(chunk) },
+      {
+        title: 'Server',
+        rows: [
+          { label: 'Asset Type', value: 'Server' },
+          { label: 'Name', value: 'web-01' },
+          { label: 'External Ref Id', value: 'EXT-123456789' },
+        ],
+      },
+    );
+
+    const csv = chunks.join('');
+    expect(csv.startsWith('\uFEFF')).toBe(true);
+    expect(csv).toContain('"Server"');
+    expect(csv).toContain('Asset Report');
+    expect(csv).toContain('Generated');
+    expect(csv).toContain('"FILTER CRITERIA"');
+    expect(csv).toContain('"Field","Value"');
+    expect(csv).toContain('"Asset Type","Server"');
+    expect(csv).toContain('"Name","web-01"');
+    expect(csv).toContain('"External Ref Id","EXT-123456789"');
+    expect(csv).toContain('"DATA"');
+  });
 });

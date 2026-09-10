@@ -2042,6 +2042,97 @@ export class AssetService {
   }
 
   //------------------------------
+  private async buildAssetReportInfoRows(input: {
+    assetTypeName: string;
+    name?: string;
+    externalRefId?: string;
+    locationTypeId?: string;
+    locationId?: string;
+    elasticQuery: Record<string, any>[];
+  }): Promise<Array<{ label: string; value: string }>> {
+    const infoRows: Array<{ label: string; value: string }> = [
+      { label: 'Asset Type', value: input.assetTypeName || '' },
+    ];
+    if (input.name) {
+      infoRows.push({ label: 'Name', value: input.name });
+    }
+    if (input.externalRefId) {
+      infoRows.push({ label: 'External Ref Id', value: input.externalRefId });
+    }
+    if (input.locationTypeId) {
+      const locationType = await this.locationTypeRepository.findOne({
+        where: { id: input.locationTypeId },
+      });
+      if (locationType) {
+        infoRows.push({ label: 'Location Type', value: locationType.name });
+      }
+    }
+    if (input.locationId) {
+      const location = await this.locationRepository.findOne({
+        where: { id: input.locationId },
+      });
+      if (location) {
+        infoRows.push({ label: 'Location', value: location.name });
+      }
+    }
+    infoRows.push(...this.collectElasticFilterRows(input.elasticQuery));
+    return infoRows;
+  }
+
+  //------------------------------
+  private escapeCsvCell(value: string): string {
+    return `"${String(value ?? '').replace(/"/g, '""')}"`;
+  }
+
+  //------------------------------
+  writeCsvReportPreamble(
+    res: { write: (chunk: string) => unknown },
+    options: {
+      title: string;
+      rows: Array<{ label: string; value: string }>;
+    },
+  ) {
+    const line = (cells: string[]) =>
+      `${cells.map((cell) => this.escapeCsvCell(cell)).join(',')}\n`;
+    const filterRows =
+      options.rows.length > 0
+        ? options.rows
+        : [{ label: 'Filters', value: 'None' }];
+
+    res.write('\uFEFF');
+    res.write(line([options.title]));
+    res.write(
+      line([`Asset Report  •  Generated ${this.formatExcelGeneratedAt()}`]),
+    );
+    res.write('\n');
+    res.write(line(['FILTER CRITERIA']));
+    res.write(line(['Field', 'Value']));
+    for (const row of filterRows) {
+      res.write(line([row.label, row.value || '—']));
+    }
+    res.write('\n');
+    res.write(line(['DATA']));
+  }
+
+  //------------------------------
+  private formatCsvReportCellValue(key: string, value: unknown): string {
+    const coerced = this.coerceExcelCellValue(key, value);
+    if (coerced instanceof Date) {
+      const pad = (part: number) => String(part).padStart(2, '0');
+      return `${coerced.getFullYear()}-${pad(coerced.getMonth() + 1)}-${pad(
+        coerced.getDate(),
+      )} ${pad(coerced.getHours())}:${pad(coerced.getMinutes())}`;
+    }
+    if (coerced === null || coerced === undefined) {
+      return '';
+    }
+    if (typeof coerced === 'object') {
+      return JSON.stringify(coerced);
+    }
+    return String(coerced);
+  }
+
+  //------------------------------
   private async writeExcelReportInfoSheet(
     workbook: ExcelJS.stream.xlsx.WorkbookWriter,
     options: {
@@ -2344,41 +2435,29 @@ export class AssetService {
 
     let csvHeadersSet = false;
     let csvKeys: string[] = [];
+    let csvInfoRows: Array<{ label: string; value: string }> = [];
+    const csvReportTitle = assetType.name || 'Asset Report';
     if (hasElasticSearch) {
       this.recursivelyFlatKeysOfSearch(elasticBody, '', elasticQuery);
     }
 
-    if (type === 'xls' && workbook) {
-      const infoRows: Array<{ label: string; value: string }> = [
-        { label: 'Asset Type', value: assetType.name || '' },
-      ];
-      if (name) {
-        infoRows.push({ label: 'Name', value: name });
-      }
-      if (externalRefId) {
-        infoRows.push({ label: 'External Ref Id', value: externalRefId });
-      }
-      if (locationTypeId) {
-        const locationType = await this.locationTypeRepository.findOne({
-          where: { id: locationTypeId },
-        });
-        if (locationType) {
-          infoRows.push({ label: 'Location Type', value: locationType.name });
-        }
-      }
-      if (locationId) {
-        const location = await this.locationRepository.findOne({
-          where: { id: locationId },
-        });
-        if (location) {
-          infoRows.push({ label: 'Location', value: location.name });
-        }
-      }
-      infoRows.push(...this.collectElasticFilterRows(elasticQuery));
+    if (type === 'xls' || type === 'csv') {
+      csvInfoRows = await this.buildAssetReportInfoRows({
+        assetTypeName: assetType.name || '',
+        name: typeof name === 'string' ? name : undefined,
+        externalRefId:
+          typeof externalRefId === 'string' ? externalRefId : undefined,
+        locationTypeId:
+          typeof locationTypeId === 'string' ? locationTypeId : undefined,
+        locationId: typeof locationId === 'string' ? locationId : undefined,
+        elasticQuery,
+      });
+    }
 
+    if (type === 'xls' && workbook) {
       await this.writeExcelReportInfoSheet(workbook, {
-        title: assetType.name || 'Asset Report',
-        rows: infoRows,
+        title: csvReportTitle,
+        rows: csvInfoRows,
       });
       excelSheetState = this.createExcelReportSheetState(
         this.createExcelReportDataSheet(workbook, 'V1'),
@@ -2503,7 +2582,7 @@ export class AssetService {
               const displayRow: Record<string, unknown> = {};
               for (const key of csvKeys) {
                 displayRow[this.formatReportColumnHeader(key)] =
-                  element[key] ?? '';
+                  this.formatCsvReportCellValue(key, element[key]);
               }
               stream!.write(displayRow);
             }
@@ -2520,11 +2599,16 @@ export class AssetService {
         if (type === 'csv') {
           if (!csvHeadersSet) {
             csvKeys = this.collectReportColumnKeys(mappedData);
+            this.writeCsvReportPreamble(res, {
+              title: csvReportTitle,
+              rows: csvInfoRows,
+            });
             stream = format({
               headers: csvKeys.map((key) => this.formatReportColumnHeader(key)),
-              writeBOM: true,
+              writeBOM: false,
               quoteHeaders: true,
               quoteColumns: true,
+              alwaysWriteHeaders: true,
             });
             stream.pipe(res);
             sqlPage = 1;
