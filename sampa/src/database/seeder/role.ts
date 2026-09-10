@@ -165,16 +165,6 @@ export const RoleSeeder = async (datasource: DataSource) => {
       }
     }
 
-    const record = await datasource.getRepository(Role).findOne({
-      where: {
-        name: element.name,
-        category: element.category,
-        superiorId: superior?.id,
-      },
-    });
-    if (record) {
-      continue;
-    }
     const role = new Role(element);
 
     await datasource

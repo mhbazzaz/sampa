@@ -204,8 +204,6 @@ export class AssetService {
             createdAssetTypes.push(processedType);
           }
         } catch (error) {
-          console.log(error);
-
           if (axios.isAxiosError(error)) {
             if (error.response) {
               throw new BadRequestException(error.response.data.message);

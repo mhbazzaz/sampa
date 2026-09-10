@@ -26,4 +26,9 @@ export class UpdateRequestDto {
   @IsString({ message: i18nValidationMessage('validation.IsString') })
   @IsOptional()
   environmentId?: string;
+
+  @ApiPropertyOptional()
+  @IsString({ message: i18nValidationMessage('validation.IsString') })
+  @IsOptional()
+  info?: string;
 }

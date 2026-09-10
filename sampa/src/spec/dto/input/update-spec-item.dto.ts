@@ -47,10 +47,4 @@ export class UpdateSpecItemDto extends PartialType(CreateSpecItemDto) {
 
   @ValidateIf((_, value) => value || value === null)
   assessmentTypeIds?: string[];
-
-  @ValidateIf((_, value) => value || value === null)
-  isPublic?: boolean;
-
-  @ValidateIf((_, value) => value || value === null)
-  isBaseSpec?: boolean;
 }

@@ -1,6 +1,5 @@
 import { Body, Controller, Post, SetMetadata, UseGuards } from '@nestjs/common';
 import { ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { CurrentMemberRoles } from 'src/common/decorators/current-member-roles.decorators';
 import { CurrentMember } from 'src/common/decorators/current-member.decorators';
 import { ActionEnum } from 'src/common/enums/action.enum';
 import { AuthorizationMetaDataEnum } from 'src/common/enums/authorization-meta-data.enum';
@@ -9,8 +8,6 @@ import { AuthorizationGuard } from 'src/common/guards/authorization.guard';
 import { UserGuard } from 'src/common/guards/user.guard';
 import { responseGenerator } from 'src/common/helpers/response-generator';
 import { Member } from 'src/member/entities/member.entity';
-import { Role } from 'src/role/entities/role.entity';
-import { CreateSpecContentDto } from '../dto/input/create-spec-content.dto';
 import { UpdateSpecContentLayerDto } from '../dto/input/update-spec-content-layer.dto';
 import { GetSpecDto } from '../dto/response/get-spec-response.dto';
 import { RequestSpecContentService } from '../services/request-spec-content.service';
@@ -22,35 +19,35 @@ export class RequestSpecContentController {
     private readonly requestSpecContentService: RequestSpecContentService,
   ) {}
 
-  //------------------------------
-  @ApiOperation({ summary: 'Create Request Spec Content' })
-  @ApiCreatedResponse({
-    type: GetSpecDto,
-  })
-  @UseGuards(AuthorizationGuard)
-  @UseGuards(UserGuard)
-  @SetMetadata(
-    AuthorizationMetaDataEnum.Action,
-    ActionEnum.AwaitingSpecsProvideSpecs,
-  )
-  @SetMetadata(AuthorizationMetaDataEnum.Process, ProcessEnum.AssessmentRequest)
-  @Post('')
-  async create(
-    @Body() data: CreateSpecContentDto,
-    @CurrentMember() member: Member,
-    @CurrentMemberRoles() memberRoles: Role[],
-  ): Promise<GetSpecDto> {
-    const result = await this.requestSpecContentService.create(
-      data,
-      member,
-      memberRoles,
-    );
-    return responseGenerator({
-      statusCode: 200,
-      message: 'successful',
-      data: result,
-    });
-  }
+  // //------------------------------
+  // @ApiOperation({ summary: 'Create Request Spec Content' })
+  // @ApiCreatedResponse({
+  //   type: GetSpecDto,
+  // })
+  // @UseGuards(AuthorizationGuard)
+  // @UseGuards(UserGuard)
+  // @SetMetadata(
+  //   AuthorizationMetaDataEnum.Action,
+  //   ActionEnum.AwaitingSpecsProvideSpecs,
+  // )
+  // @SetMetadata(AuthorizationMetaDataEnum.Process, ProcessEnum.AssessmentRequest)
+  // @Post('')
+  // async create(
+  //   @Body() data: CreateSpecContentDto,
+  //   @CurrentMember() member: Member,
+  //   @CurrentMemberRoles() memberRoles: Role[],
+  // ): Promise<GetSpecDto> {
+  //   const result = await this.requestSpecContentService.create(
+  //     data,
+  //     member,
+  //     memberRoles,
+  //   );
+  //   return responseGenerator({
+  //     statusCode: 200,
+  //     message: 'successful',
+  //     data: result,
+  //   });
+  // }
 
   //------------------------------
   @ApiOperation({ summary: 'Create Request Spec Content' })
@@ -59,10 +56,7 @@ export class RequestSpecContentController {
   })
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
-  @SetMetadata(
-    AuthorizationMetaDataEnum.Action,
-    ActionEnum.LayerSpecOnboardingAccept,
-  )
+  @SetMetadata(AuthorizationMetaDataEnum.Action, ActionEnum.OnboardingAddSpecs)
   @SetMetadata(AuthorizationMetaDataEnum.Process, ProcessEnum.AssessmentLayer)
   @Post('assessment-layer')
   async updateSpecForLayer(

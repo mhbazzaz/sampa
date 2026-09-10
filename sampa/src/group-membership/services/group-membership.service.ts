@@ -140,8 +140,6 @@ export class GroupMembershipService {
     updateGroupMembership: UpdateGroupMembershipDto,
     member: Member,
   ) {
-    console.log(member);
-
     let { usersData } = updateGroupMembership;
     const { groupId } = updateGroupMembership;
 

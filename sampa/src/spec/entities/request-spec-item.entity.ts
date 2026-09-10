@@ -58,12 +58,4 @@ export class RequestSpecItem extends AbstractEntity<RequestSpecItem> {
   )
   @JoinTable()
   assessmentType?: AssessmentType[];
-
-  // Public spec visible to all applicants; Private visible only to Security Dept (INTERNAL roles)
-  @Column({ type: 'boolean', default: true })
-  isPublic: boolean;
-
-  // Base spec: required before submitting to CISO in initial request page (visible to applicant)
-  @Column({ type: 'boolean', default: false })
-  isBaseSpec: boolean;
 }

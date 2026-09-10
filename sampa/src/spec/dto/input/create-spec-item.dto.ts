@@ -63,16 +63,4 @@ export class CreateSpecItemDto {
   })
   @IsOptional()
   assessmentTypeIds?: string[];
-
-  // Public spec visible to all applicants; Private visible only to Security Dept
-  @ApiProperty()
-  @IsBoolean({ message: i18nValidationMessage('validation.IsBoolean') })
-  @IsOptional()
-  isPublic?: boolean;
-
-  // Base spec: required before submitting to CISO (visible to applicant)
-  @ApiProperty()
-  @IsBoolean({ message: i18nValidationMessage('validation.IsBoolean') })
-  @IsOptional()
-  isBaseSpec?: boolean;
 }

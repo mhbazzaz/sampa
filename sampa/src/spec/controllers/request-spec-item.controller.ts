@@ -7,22 +7,15 @@ import {
   Patch,
   Post,
   Query,
-  SetMetadata,
   UseGuards,
 } from '@nestjs/common';
 import { ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { CurrentMemberRoles } from 'src/common/decorators/current-member-roles.decorators';
 import { CurrentMember } from 'src/common/decorators/current-member.decorators';
-import { ActionEnum } from 'src/common/enums/action.enum';
-import { AuthorizationMetaDataEnum } from 'src/common/enums/authorization-meta-data.enum';
-import { ProcessEnum } from 'src/common/enums/process.enum';
-import { AuthorizationGuard } from 'src/common/guards/authorization.guard';
 import { AdminGuard } from 'src/common/guards/admin.guard';
 import { UserGuard } from 'src/common/guards/user.guard';
 import { responseGenerator } from 'src/common/helpers/response-generator';
 import { PaginationDto } from 'src/common/pagination-dto/pagination.dto';
 import { Member } from 'src/member/entities/member.entity';
-import { Role } from 'src/role/entities/role.entity';
 import { CreateSpecItemDto } from '../dto/input/create-spec-item.dto';
 import { FindFilteredRequestSpecItemQueryDto } from '../dto/input/find-filtered-request-spec-item.dto';
 import { GetSpecItemDto } from '../dto/input/get-spec-item.dto';
@@ -59,20 +52,11 @@ export class RequestSpecItemController {
   @ApiCreatedResponse({
     type: GetSpecDto,
   })
-  @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
-  @SetMetadata(AuthorizationMetaDataEnum.Action, ActionEnum.Read)
-  @SetMetadata(AuthorizationMetaDataEnum.Process, ProcessEnum.AssessmentRequest)
   @Get('spec-item')
-  async findAll(
-    @Query() query: GetSpecItemDto,
-    @CurrentMemberRoles() memberRoles: Role[],
-  ) {
+  async findAll(@Query() query: GetSpecItemDto) {
     const data =
-      await this.requestSpecItemService.findAllPaginationUserScope(
-        query,
-        memberRoles,
-      );
+      await this.requestSpecItemService.findAllPaginationUserScope(query);
     return responseGenerator({
       statusCode: 200,
       message: 'successful',

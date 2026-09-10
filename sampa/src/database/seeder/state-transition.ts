@@ -77,7 +77,7 @@ const stateTransitions: {
   {
     process: ProcessEnum.AssessmentRequest,
     currentState: 'accepted',
-    nextState: 'awaitingSpecs',
+    nextState: 'groupReady',
     action: ActionEnum.AcceptedArrangeTeam,
   },
   {
@@ -88,27 +88,9 @@ const stateTransitions: {
   },
   {
     process: ProcessEnum.AssessmentRequest,
-    currentState: 'awaitingSpecs',
-    nextState: 'preEvaluation',
-    action: ActionEnum.AwaitingSpecsProvideSpecs,
-  },
-  {
-    process: ProcessEnum.AssessmentRequest,
-    currentState: 'preEvaluation',
-    nextState: 'onboarding',
-    action: ActionEnum.PreEvaluationAccept,
-  },
-  {
-    process: ProcessEnum.AssessmentRequest,
-    currentState: 'preEvaluation',
-    nextState: 'awaitingSpecs',
-    action: ActionEnum.PreEvaluationReject,
-  },
-  {
-    process: ProcessEnum.AssessmentRequest,
-    currentState: 'onboarding',
+    currentState: 'groupReady',
     nextState: 'underAnalysis',
-    action: ActionEnum.OnboardingFinalizeSpecs,
+    action: ActionEnum.GroupReadyFinalizeSpecs,
   },
   {
     process: ProcessEnum.AssessmentRequest,
@@ -186,40 +168,16 @@ const stateTransitions: {
   },
   {
     process: ProcessEnum.AssessmentLayer,
-    currentState: 'groupReady',
-    nextState: 'pendingLayerSpecs',
-    action: ActionEnum.GroupReadyReferApplicant,
-  },
-  {
-    process: ProcessEnum.AssessmentLayer,
-    currentState: 'groupReady',
-    nextState: 'groupReady', // self-loop
-    action: ActionEnum.GroupReadyAssignAuditor,
-  },
-  {
-    process: ProcessEnum.AssessmentLayer,
-    currentState: 'pendingLayerSpecs',
-    nextState: 'layerSpecPreEvaluation',
-    action: ActionEnum.PendingLayerSpecsSubmit,
-  },
-  {
-    process: ProcessEnum.AssessmentLayer,
-    currentState: 'layerSpecPreEvaluation',
-    nextState: 'pendingLayerSpecs',
-    action: ActionEnum.LayerSpecPreEvaluationNeedModifications,
-  },
-  {
-    process: ProcessEnum.AssessmentLayer,
-    currentState: 'layerSpecPreEvaluation',
-    nextState: 'layerSpecOnboarding',
-    action: ActionEnum.LayerSpecPreEvaluationAccept,
-  },
-  {
-    process: ProcessEnum.AssessmentLayer,
-    currentState: 'layerSpecOnboarding',
+    currentState: 'onboarding',
     nextState: 'pendingLayerTestcases',
-    action: ActionEnum.LayerSpecOnboardingAccept,
+    action: ActionEnum.OnboardingFinalizeSpecs,
   },
+  // {
+  //   process: ProcessEnum.AssessmentLayer,
+  //   currentState: 'groupReady',
+  //   nextState: 'onboarding',
+  //   action: ActionEnum.GroupReadyReferApplicant,
+  // },
   {
     process: ProcessEnum.AssessmentLayer,
     currentState: 'pendingLayerTestcases',

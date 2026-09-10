@@ -29,19 +29,11 @@ const actionsArray: {
         name: ActionEnum.DraftRegister,
         process: ProcessEnum.AssessmentRequest,
       },
-      {
-        name: ActionEnum.AwaitingSpecsProvideSpecs,
-        process: ProcessEnum.AssessmentRequest,
-      },
-      {
-        name: ActionEnum.OnboardingFinalizeSpecs,
-        process: ProcessEnum.AssessmentRequest,
-      },
       // Assessment Layer actions for applicant
-      {
-        name: ActionEnum.GroupReadyReferApplicant,
-        process: ProcessEnum.AssessmentLayer,
-      },
+      // {
+      //   name: ActionEnum.GroupReadyReferApplicant,
+      //   process: ProcessEnum.AssessmentLayer,
+      // },
       {
         name: ActionEnum.RemediateLayerVulnerabilitiesDecline,
         process: ProcessEnum.AssessmentLayer,
@@ -270,10 +262,6 @@ const actionsArray: {
         process: ProcessEnum.AssessmentRequest,
       },
       {
-        name: ActionEnum.AcceptedArrangeTeam,
-        process: ProcessEnum.AssessmentRequest,
-      },
-      {
         name: ActionEnum.StatusReportedFinalize,
         process: ProcessEnum.AssessmentRequest,
       },
@@ -416,10 +404,6 @@ const actionsArray: {
       },
       {
         name: ActionEnum.ApprovedModify,
-        process: ProcessEnum.AssessmentRequest,
-      },
-      {
-        name: ActionEnum.AcceptedArrangeTeam,
         process: ProcessEnum.AssessmentRequest,
       },
       // Assessment Layer actions for CISO
@@ -726,21 +710,18 @@ const actionsArray: {
     ],
     actionNames: [
       {
-        name: ActionEnum.LayerSpecPreEvaluationNeedModifications,
-        process: ProcessEnum.AssessmentLayer,
-      },
-      {
-        name: ActionEnum.LayerSpecPreEvaluationAccept,
-        process: ProcessEnum.AssessmentLayer,
-      },
-      {
-        name: ActionEnum.LayerSpecOnboardingAccept,
+        name: ActionEnum.OnboardingFinalizeSpecs,
         process: ProcessEnum.AssessmentLayer,
       },
       {
         name: ActionEnum.PendingLayerTestcasesSubmit,
         process: ProcessEnum.AssessmentLayer,
       },
+      {
+        name: ActionEnum.OnboardingAddSpecs,
+        process: ProcessEnum.AssessmentLayer,
+      },
+
       // Others
       {
         name: ActionEnum.CreateTestCaseComment,

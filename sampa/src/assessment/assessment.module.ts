@@ -13,6 +13,8 @@ import { RequestSpecItemRepository } from 'src/spec/repositories/request-spec-it
 import { StateTransitionModule } from 'src/state-transition/state-transition.module';
 import { StatesModule } from 'src/states/states.module';
 import { TestcaseModule } from 'src/test-case/test-case.module';
+import { IdpEmployeeClient } from './clients/idp-employee.client';
+import { NotificationManagementClient } from './clients/notification-management.client';
 import { AssessmentLayerController } from './controllers/assessment-layer.controller';
 import { AssessmentTypeController } from './controllers/assessment-type.controller';
 import { AssessmentController } from './controllers/assessment.controller';
@@ -24,10 +26,13 @@ import { AssessmentLayerRepository } from './repositories/assessment-layer.repos
 import { AssessmentRequestRepository } from './repositories/assessment-request.repository';
 import { AssessmentTeamRepository } from './repositories/assessment-team.repository';
 import { AssessmentTypeRepository } from './repositories/assessment-type.repository';
+import { RemainedVulnerabilityReportRepository } from './repositories/remained-vulnerability-report.repository';
+import { AccessibleNotificationsService } from './services/accessible-notifications.service';
 import { AssessmentLayerService } from './services/assessment-layer.service';
 import { AssessmentRequestService } from './services/assessment-request.service';
 import { AssessmentTeamService } from './services/assessment-team.service';
 import { AssessmentTypeService } from './services/assessment-type.service';
+import { RemainedVulnerabilityReportService } from './services/remained-vulnerability-report.service';
 
 @Module({
   imports: [
@@ -65,6 +70,11 @@ import { AssessmentTypeService } from './services/assessment-type.service';
     AssessmentTeamService,
     AssessmentTeamRepository,
     RequestSpecItemRepository,
+    RemainedVulnerabilityReportService,
+    RemainedVulnerabilityReportRepository,
+    IdpEmployeeClient,
+    NotificationManagementClient,
+    AccessibleNotificationsService,
   ],
   exports: [
     AssessmentLayerRepository,

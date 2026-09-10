@@ -142,29 +142,46 @@ export class AssessmentLayerController {
   }
 
   //------------------------------
-  @ApiOperation({
-    summary: `Update One Assessment Layer status by action, ${ActionEnum.LayerSpecPreEvaluationAccept} 
-    ${ActionEnum.LayerSpecOnboardingAccept} 
-    | ${ProcessEnum.AssessmentLayer}`,
-  })
+  // @UseGuards(AuthorizationGuard)
+  // @UseGuards(UserGuard)
+  // @SetMetadata(AuthorizationMetaDataEnum.Action, [
+  //   ActionEnum.OnboardingFinalizeSpecs,
+  // ])
+  // @SetMetadata(AuthorizationMetaDataEnum.Process, ProcessEnum.AssessmentLayer)
+  // @Patch('update-request-layer-status-by-action-my-team/:id')
+  // async updateStatusByActionMyTeam(
+  //   @Param('id') layerId: string,
+  //   @Body() data: UpdateRequestLayerStatusByActionDto,
+  //   @CurrentMember() member: Member,
+  //   @CurrentMemberRoles() memberRoles: Role[],
+  // ) {
+  //   await this.assessmentLayerService.updateAssessmentLayerStatusByActionMyTeam(
+  //     layerId,
+  //     data,
+  //     member.id,
+  //     memberRoles,
+  //   );
+  //   return responseGenerator({
+  //     statusCode: 200,
+  //     message: 'successful',
+  //   });
+  // }
+
+  //------------------------------
   @UseGuards(AuthorizationGuard)
   @UseGuards(UserGuard)
   @SetMetadata(AuthorizationMetaDataEnum.Action, [
-    ActionEnum.LayerSpecPreEvaluationAccept,
-    ActionEnum.LayerSpecOnboardingAccept,
-    ActionEnum.LayerSpecPreEvaluationNeedModifications,
+    ActionEnum.OnboardingFinalizeSpecs,
   ])
   @SetMetadata(AuthorizationMetaDataEnum.Process, ProcessEnum.AssessmentLayer)
-  @Patch('update-request-layer-status-by-action-my-team/:id')
+  @Patch('request-layer-finalize-spec/:id')
   async updateStatusByActionMyTeam(
     @Param('id') layerId: string,
-    @Body() data: UpdateRequestLayerStatusByActionDto,
     @CurrentMember() member: Member,
     @CurrentMemberRoles() memberRoles: Role[],
   ) {
-    await this.assessmentLayerService.updateAssessmentLayerStatusByActionMyTeam(
+    await this.assessmentLayerService.assessmentLayerFinalizeSpec(
       layerId,
-      data,
       member.id,
       memberRoles,
     );

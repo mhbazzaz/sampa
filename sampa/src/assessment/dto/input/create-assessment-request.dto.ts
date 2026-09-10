@@ -21,6 +21,11 @@ export class CreateAssessmentRequestDto {
   @ApiProperty()
   @IsString({ message: i18nValidationMessage('validation.IsString') })
   @IsNotEmpty({ message: i18nValidationMessage('validation.IsNotEmpty') })
+  info: string;
+
+  @ApiProperty()
+  @IsString({ message: i18nValidationMessage('validation.IsString') })
+  @IsNotEmpty({ message: i18nValidationMessage('validation.IsNotEmpty') })
   assetToAuditBaseline: string;
 
   @ApiProperty({ type: () => [String] })

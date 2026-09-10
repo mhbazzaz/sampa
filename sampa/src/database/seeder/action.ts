@@ -58,12 +58,12 @@ const actions: {
     processName: ProcessEnum.AssessmentRequest,
   },
   {
-    name: ActionEnum.ApprovedModify,
+    name: ActionEnum.OnboardingFinalizeSpecs,
     tier: ActionTierEnum.BACKEND,
     processName: ProcessEnum.AssessmentRequest,
   },
   {
-    name: ActionEnum.AcceptedArrangeTeam,
+    name: ActionEnum.ApprovedModify,
     tier: ActionTierEnum.BACKEND,
     processName: ProcessEnum.AssessmentRequest,
   },
@@ -73,22 +73,7 @@ const actions: {
     processName: ProcessEnum.AssessmentRequest,
   },
   {
-    name: ActionEnum.AwaitingSpecsProvideSpecs,
-    tier: ActionTierEnum.BACKEND,
-    processName: ProcessEnum.AssessmentRequest,
-  },
-  {
-    name: ActionEnum.PreEvaluationAccept,
-    tier: ActionTierEnum.BACKEND,
-    processName: ProcessEnum.AssessmentRequest,
-  },
-  {
-    name: ActionEnum.PreEvaluationReject,
-    tier: ActionTierEnum.BACKEND,
-    processName: ProcessEnum.AssessmentRequest,
-  },
-  {
-    name: ActionEnum.OnboardingFinalizeSpecs,
+    name: ActionEnum.GroupReadyFinalizeSpecs,
     tier: ActionTierEnum.BACKEND,
     processName: ProcessEnum.AssessmentRequest,
   },
@@ -109,6 +94,11 @@ const actions: {
   },
   {
     name: ActionEnum.ClosedReopen,
+    tier: ActionTierEnum.BACKEND,
+    processName: ProcessEnum.AssessmentRequest,
+  },
+  {
+    name: ActionEnum.AcceptedArrangeTeam,
     tier: ActionTierEnum.BACKEND,
     processName: ProcessEnum.AssessmentRequest,
   },
@@ -155,7 +145,7 @@ const actions: {
     processName: ProcessEnum.AssessmentLayer,
   },
   {
-    name: ActionEnum.GroupReadyReferApplicant,
+    name: ActionEnum.OnboardingAddSpecs,
     tier: ActionTierEnum.BACKEND,
     processName: ProcessEnum.AssessmentLayer,
   },
@@ -166,21 +156,6 @@ const actions: {
   },
   {
     name: ActionEnum.PendingLayerTestcasesSubmit,
-    tier: ActionTierEnum.BACKEND,
-    processName: ProcessEnum.AssessmentLayer,
-  },
-  {
-    name: ActionEnum.LayerSpecPreEvaluationNeedModifications,
-    tier: ActionTierEnum.BACKEND,
-    processName: ProcessEnum.AssessmentLayer,
-  },
-  {
-    name: ActionEnum.LayerSpecPreEvaluationAccept,
-    tier: ActionTierEnum.BACKEND,
-    processName: ProcessEnum.AssessmentLayer,
-  },
-  {
-    name: ActionEnum.LayerSpecOnboardingAccept,
     tier: ActionTierEnum.BACKEND,
     processName: ProcessEnum.AssessmentLayer,
   },
@@ -241,6 +216,11 @@ const actions: {
   },
   {
     name: ActionEnum.LayerReEvaluationRequestedAccept,
+    tier: ActionTierEnum.BACKEND,
+    processName: ProcessEnum.AssessmentLayer,
+  },
+  {
+    name: ActionEnum.OnboardingFinalizeSpecs,
     tier: ActionTierEnum.BACKEND,
     processName: ProcessEnum.AssessmentLayer,
   },

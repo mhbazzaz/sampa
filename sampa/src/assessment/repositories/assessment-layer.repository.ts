@@ -398,6 +398,7 @@ export class AssessmentLayerRepository extends AbstractRepository<AssessmentLaye
       where: { roles: { id: In(memberRoles.map((role) => role.id)) } },
     });
 
+    // let layerNextStateId: string = '';
     const queryRunner = this.dataSource.createQueryRunner();
 
     await queryRunner.connect();
@@ -527,7 +528,7 @@ export class AssessmentLayerRepository extends AbstractRepository<AssessmentLaye
             currentStateId: layer.stateId,
           });
         }
-
+        // layerNextStateId = stateTransition.id;
         layer.stateId = stateTransition.id;
 
         await this.actionLogBufferService.flushToActionLog(
@@ -569,19 +570,17 @@ export class AssessmentLayerRepository extends AbstractRepository<AssessmentLaye
         }
       }
 
-      console.log(allUpdated);
-
       if (allUpdated) {
         const stateLayer = await this.statesRepository.findOne({
           where: {
-            name: 'pendingLayerSpecs',
+            name: 'onboarding',
             process: { name: 'assessment layer' },
           },
         });
 
         if (!stateLayer) {
           throw new InternalServerErrorException(
-            `state not found: name: pendingLayerSpecs _ process: assessment layer`,
+            `state not found: name: onboarding _ process: assessment layer`,
           );
         }
 
@@ -593,13 +592,13 @@ export class AssessmentLayerRepository extends AbstractRepository<AssessmentLaye
 
         const stateRequest = await this.statesRepository.findOne({
           where: {
-            name: 'awaitingSpecs',
+            name: 'groupReady',
             process: { name: 'assessment request' },
           },
         });
         if (!stateRequest) {
           throw new InternalServerErrorException(
-            `state not found: name: awaitingSpecs _ process: assessment request`,
+            `state not found: name: groupReady _ process: assessment request`,
           );
         }
         await queryRunner.manager.update(
@@ -608,6 +607,25 @@ export class AssessmentLayerRepository extends AbstractRepository<AssessmentLaye
             id: layers[0].assessmentRequestId,
           },
           { stateId: stateRequest.id },
+        );
+
+        await this.actionLogBufferService.flushToActionLog(
+          {
+            assessmentRequestId: layers[0].assessmentRequestId,
+          },
+          {
+            userId: member.id,
+            roleIds: memberRoles.map((r) => r.id),
+            action: ActionEnum.SupervisedAssignAllTeamsAuditors,
+            status: ActionLogStatusEnum.SUCCESS,
+            assessmentRequestCurrentStateId:
+              layers[0].assessmentRequest?.stateId ?? null,
+            assessmentRequestNextStateId: stateRequest.id,
+
+            // assessmentLayerCurrentStateId: layerNextStateId,
+            // assessmentLayerNextStateId: stateLayer.id,
+          },
+          queryRunner,
         );
       }
 
@@ -640,15 +658,10 @@ export class AssessmentLayerRepository extends AbstractRepository<AssessmentLaye
 
         if (
           a.name === ActionEnum.SAMAssignedAssignSAM ||
-          a.name === ActionEnum.SAMAssignedAddSupervise
+          a.name === ActionEnum.SAMAssignedAddSupervise ||
+          a.name === ActionEnum.GroupReadyAssignAuditor
         ) {
-          if (
-            actions.findIndex(
-              (ac) => ac.name === ActionEnum.AcceptedArrangeTeam,
-            ) > -1
-          ) {
-            return false;
-          }
+          return false;
         }
         return true;
       })
@@ -750,6 +763,14 @@ export class AssessmentLayerRepository extends AbstractRepository<AssessmentLaye
       .leftJoinAndSelect('request.asset', 'asset')
       .leftJoinAndSelect('request.requestSpecContents', 'requestSpecContents')
       .leftJoinAndSelect('request.testcaseContents', 'testcaseContents')
+      .leftJoinAndSelect(
+        'requestSpecContents.requestSpecItem',
+        'requestSpecItem',
+      )
+      .leftJoinAndSelect(
+        'requestSpecItem.assessmentType',
+        'requestSpecItemAssessmentType',
+      )
       .leftJoinAndSelect('request.environment', 'environment')
       .leftJoinAndSelect(
         'testcaseContents.testcaseRemediates',
@@ -766,8 +787,6 @@ export class AssessmentLayerRepository extends AbstractRepository<AssessmentLaye
       const isInternal = memberRoles.some(
         (role) => role.category === CategoryEnum.INTERNAL,
       );
-
-      console.log(isInternal);
 
       if (isInternal) {
         const isSupervisor = memberRoles.some((role) =>
@@ -962,5 +981,51 @@ export class AssessmentLayerRepository extends AbstractRepository<AssessmentLaye
     queryBuilder = queryBuilder.skip(query.skip).take(query.take);
 
     return queryBuilder.getManyAndCount();
+  }
+
+  //------------------------------
+  async getAccessibleLayerIds(
+    member: Member,
+    memberRoles: Role[],
+    actions: Action[],
+    accessibleRequestIds: string[],
+  ): Promise<string[]> {
+    const hasReadAccess = actions.some(
+      (action) =>
+        action.name === ActionEnum.Read &&
+        action.process?.name === ProcessEnum.AssessmentRequest,
+    );
+
+    const qb = this.assessmentLayerRepository
+      .createQueryBuilder('assessmentLayer')
+      .select('assessmentLayer.id', 'id')
+      .distinct(true)
+      .leftJoin('assessmentLayer.assessmentTeams', 'assessmentTeams')
+      .where('assessmentLayer.deletedAt IS NULL');
+
+    if (!hasReadAccess) {
+      const isSupervisor = memberRoles.some((role) =>
+        role.name.includes('supervisor'),
+      );
+
+      const teamCondition = isSupervisor
+        ? '(assessmentTeams.memberId = :memberId AND assessmentTeams.isLead = true)'
+        : '(assessmentTeams.memberId = :memberId AND assessmentTeams.isLead = false)';
+
+      if (accessibleRequestIds.length > 0) {
+        qb.andWhere(
+          `(${teamCondition} OR assessmentLayer.assessmentRequestId IN (:...accessibleRequestIds))`,
+          {
+            memberId: member.id,
+            accessibleRequestIds,
+          },
+        );
+      } else {
+        qb.andWhere(teamCondition, { memberId: member.id });
+      }
+    }
+
+    const rows = await qb.getRawMany<{ id: string }>();
+    return rows.map((row) => row.id);
   }
 }

@@ -117,6 +117,7 @@ export class ActionLogBufferService {
     key: {
       assessmentRequestId: string;
       assessmentLayerId?: string;
+      assessmentLayerIds?: string[];
     },
     logData: {
       userId: string;
@@ -158,6 +159,20 @@ export class ActionLogBufferService {
             changes: undefined,
           });
 
+        if (key.assessmentLayerIds) {
+          await queryRunner.manager.getRepository(ActionLog).save(
+            key.assessmentLayerIds.map((layer) => {
+              return {
+                ...logData,
+                ...resolvedStateIds,
+                assessmentRequestId: key.assessmentRequestId,
+                assessmentLayerId: layer,
+                changes: undefined,
+              };
+            }),
+          );
+        }
+
         if (shouldManageTransaction) {
           await queryRunner.commitTransaction();
         }
@@ -187,6 +202,20 @@ export class ActionLogBufferService {
           assessmentLayerId: key.assessmentLayerId || null,
           changes: allChanges.length > 0 ? allChanges : undefined,
         });
+
+      if (key.assessmentLayerIds) {
+        await queryRunner.manager.getRepository(ActionLog).save(
+          key.assessmentLayerIds.map((layer) => {
+            return {
+              ...logData,
+              ...resolvedStateIds,
+              assessmentRequestId: key.assessmentRequestId,
+              assessmentLayerId: layer,
+              changes: undefined,
+            };
+          }),
+        );
+      }
 
       await queryRunner.manager
         .getRepository(PendingChange)

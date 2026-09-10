@@ -337,6 +337,7 @@ describe('AssessmentRequestService', () => {
         assessmentTypeIds: ['1'],
         assetToAuditBaseline: 'test',
         type: 'someType',
+        info: 'test',
       };
       const memberId = 'member-1';
 

@@ -14,7 +14,6 @@ import { ChangelogConfigFactory } from 'src/action-log/services/change-log-confi
 import { GenericChangelogService } from 'src/action-log/services/generic-change-log.service';
 import { ActionRepository } from 'src/action/repositories/action.repository';
 import { AssetService } from 'src/asset/services/asset-to-audit.service';
-import { CategoryEnum } from 'src/common/enums/category.enum';
 import { ActionLogStatusEnum } from 'src/common/enums/action-log.enum';
 import { ActionEnum } from 'src/common/enums/action.enum';
 import { ExportFormatEnum } from 'src/common/enums/export-format.enum';
@@ -35,7 +34,6 @@ import { Role } from 'src/role/entities/role.entity';
 import { RequestSpecItemRepository } from 'src/spec/repositories/request-spec-item.repository';
 import { StateTransitionRepository } from 'src/state-transition/repositories/state-transition.repository';
 import { StateTransitionService } from 'src/state-transition/services/state-transition.service';
-import { State } from 'src/states/entities/state.entity';
 import { StatesRepository } from 'src/states/repositories/state.repository';
 import { StatesService } from 'src/states/services/states.service';
 import { Vault } from 'src/vault/vault';
@@ -186,6 +184,7 @@ export class AssessmentRequestService {
 
     const requestData = {
       asset: assetToAudit,
+      info: dto.info,
     };
 
     const state = await this.statesRepository.findOne({
@@ -409,152 +408,144 @@ export class AssessmentRequestService {
   }
 
   //------------------------------
-  async provideSpecs(requestId: string, member: Member, memberRoles: Role[]) {
-    const request =
-      await this.assessmentRequestRepository.getRequestIfUserHasAccessToChangeIt(
-        requestId,
-        member,
-        memberRoles,
-        [
-          'asset',
-          'requestSpecContents',
-          'environment',
-          'assessmentLayers.assessmentType',
-          'assessmentLayers.state',
-        ],
-      );
+  // async provideSpecs(requestId: string, member: Member, memberRoles: Role[]) {
+  //   const request =
+  //     await this.assessmentRequestRepository.getRequestIfUserHasAccessToChangeIt(
+  //       requestId,
+  //       member,
+  //       memberRoles,
+  //       [
+  //         'asset',
+  //         'requestSpecContents',
+  //         'environment',
+  //         'assessmentLayers.assessmentType',
+  //         'assessmentLayers.state',
+  //       ],
+  //     );
 
-    if (!request) {
-      throw new BadRequestException(
-        this.i18nService.t('messages.ERROR_NOT_FOUND_PROPERTY', {
-          args: { property: 'request' },
-        }),
-      );
-    }
+  //   if (!request) {
+  //     throw new BadRequestException(
+  //       this.i18nService.t('messages.ERROR_NOT_FOUND_PROPERTY', {
+  //         args: { property: 'request' },
+  //       }),
+  //     );
+  //   }
 
-    const requestCurrentStateId = request.stateId;
+  //   const requestCurrentStateId = request.stateId;
 
-    // External users (Applicant/ApplicantManager) only need to fill public specs
-    // Internal users (Security Dept) need to fill all specs
-    const isExternal = memberRoles.some(
-      (role) => role.category === CategoryEnum.EXTERNAL,
-    );
+  //   const allSpecItems = await this.requestSpecItemRepository.findAll({
+  //     where: {
+  //       assessmentType: request.assessmentLayers?.length
+  //         ? { id: In(request.assessmentLayers.map((l) => l.assessmentTypeId)) }
+  //         : undefined,
+  //       environments: { id: request.environmentId },
+  //       assetTypeId: request.asset?.assetTypeId,
+  //     },
+  //     relations: { assessmentType: true },
+  //   });
 
-    const allSpecItems = await this.requestSpecItemRepository.findAll({
-      where: {
-        assessmentType: request.assessmentLayers?.length
-          ? { id: In(request.assessmentLayers.map((l) => l.assessmentTypeId)) }
-          : undefined,
-        environments: { id: request.environmentId },
-        assetTypeId: request.asset?.assetTypeId,
-        // Applicants: only public specs required
-        ...(isExternal ? { isPublic: true } : {}),
-      },
-      relations: { assessmentType: true },
-    });
+  //   if (
+  //     !request.requestSpecContents ||
+  //     allSpecItems.length !== request.requestSpecContents.length
+  //   ) {
+  //     throw new BadRequestException(
+  //       this.i18nService.t('messages.ERROR_SPECS_NOT_FILLED_COMPLETELY'),
+  //     );
+  //   }
 
-    if (
-      !request.requestSpecContents ||
-      allSpecItems.length !== request.requestSpecContents.length
-    ) {
-      throw new BadRequestException(
-        this.i18nService.t('messages.ERROR_SPECS_NOT_FILLED_COMPLETELY'),
-      );
-    }
+  //   const { process, action } = await this.getProcessAndAction(
+  //     ProcessEnum.AssessmentLayer,
+  //     ActionEnum.PendingLayerSpecsSubmit,
+  //   );
 
-    const { process, action } = await this.getProcessAndAction(
-      ProcessEnum.AssessmentLayer,
-      ActionEnum.PendingLayerSpecsSubmit,
-    );
+  //   const queryRunner = this.dataSource.createQueryRunner();
+  //   await queryRunner.connect();
+  //   await queryRunner.startTransaction();
 
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+  //   try {
+  //     let anyLayerUpdated = false;
+  //     let expectedState: State | null = null;
+  //     for (const layer of request.assessmentLayers!) {
+  //       if (layer.state) {
+  //         if (layer.state.name !== 'pendingLayerSpecs') continue;
+  //         const stateTransition =
+  //           await this.stateTransitionService.getNextStatus({
+  //             processId: process.id,
+  //             actionId: action.id,
+  //             currentStateId: layer.stateId,
+  //           });
 
-    try {
-      let anyLayerUpdated = false;
-      let expectedState: State | null = null;
-      for (const layer of request.assessmentLayers!) {
-        if (layer.state) {
-          if (layer.state.name !== 'pendingLayerSpecs') continue;
-          const stateTransition =
-            await this.stateTransitionService.getNextStatus({
-              processId: process.id,
-              actionId: action.id,
-              currentStateId: layer.stateId,
-            });
+  //         await queryRunner.manager.update(
+  //           AssessmentLayer,
+  //           { id: layer.id },
+  //           { stateId: stateTransition.id },
+  //         );
 
-          await queryRunner.manager.update(
-            AssessmentLayer,
-            { id: layer.id },
-            { stateId: stateTransition.id },
-          );
+  //         await this.flushLayerStateActionLog({
+  //           action: ActionEnum.PendingLayerSpecsSubmit,
+  //           member,
+  //           memberRoles,
+  //           assessmentRequestId: request.id,
+  //           assessmentLayerId: layer.id,
+  //           layerCurrentStateId: layer.stateId,
+  //           layerNextStateId: stateTransition.id,
+  //           requestCurrentStateId: requestCurrentStateId,
+  //           requestNextStateId: requestCurrentStateId,
+  //         });
 
-          await this.flushLayerStateActionLog({
-            action: ActionEnum.PendingLayerSpecsSubmit,
-            member,
-            memberRoles,
-            assessmentRequestId: request.id,
-            assessmentLayerId: layer.id,
-            layerCurrentStateId: layer.stateId,
-            layerNextStateId: stateTransition.id,
-            requestCurrentStateId: requestCurrentStateId,
-            requestNextStateId: requestCurrentStateId,
-          });
+  //         anyLayerUpdated = true;
+  //       }
 
-          anyLayerUpdated = true;
-        }
+  //       if (!anyLayerUpdated) {
+  //         throw new BadRequestException(
+  //           'No layers are in "pendingLayerSpecs" state. Cannot submit specs.',
+  //         );
+  //       }
 
-        if (!anyLayerUpdated) {
-          throw new BadRequestException(
-            'No layers are in "pendingLayerSpecs" state. Cannot submit specs.',
-          );
-        }
+  //       expectedState = await this.stateService.findOne({
+  //         where: {
+  //           name: 'layerSpecPreEvaluation',
+  //           processId: process.id,
+  //         },
+  //       });
+  //     }
 
-        expectedState = await this.stateService.findOne({
-          where: {
-            name: 'layerSpecPreEvaluation',
-            processId: process.id,
-          },
-        });
-      }
+  //     if (!expectedState) {
+  //       throw new InternalServerErrorException('Target layer state not found');
+  //     }
 
-      if (!expectedState) {
-        throw new InternalServerErrorException('Target layer state not found');
-      }
+  //     const requestNextState = await this.updateRequestIfAllLayersAccepted(
+  //       queryRunner,
+  //       request.id,
+  //       expectedState.id,
+  //       ActionEnum.AwaitingSpecsProvideSpecs,
+  //       [
+  //         ActionEnum.LayerSpecPreEvaluationAccept,
+  //         ActionEnum.LayerSpecOnboardingAccept,
+  //         ActionEnum.PendingLayerTestcasesSubmit,
+  //         ActionEnum.LayerAssessmentCompletedAccept,
+  //       ],
+  //     );
+  //     await queryRunner.commitTransaction();
 
-      const requestNextState = await this.updateRequestIfAllLayersAccepted(
-        queryRunner,
-        request.id,
-        expectedState.id,
-        ActionEnum.AwaitingSpecsProvideSpecs,
-        [
-          ActionEnum.LayerSpecPreEvaluationAccept,
-          ActionEnum.LayerSpecOnboardingAccept,
-          ActionEnum.PendingLayerTestcasesSubmit,
-          ActionEnum.LayerAssessmentCompletedAccept,
-        ],
-      );
-      await queryRunner.commitTransaction();
-
-      if (requestNextState) {
-        await this.flushRequestStateActionLog({
-          action: ActionEnum.AwaitingSpecsProvideSpecs,
-          member,
-          memberRoles,
-          assessmentRequestId: request.id,
-          currentStateId: requestCurrentStateId,
-          nextStateId: requestNextState,
-        });
-      }
-      return true;
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      await queryRunner.release();
-    }
-  }
+  //     if (requestNextState) {
+  //       await this.flushRequestStateActionLog({
+  //         action: ActionEnum.AwaitingSpecsProvideSpecs,
+  //         member,
+  //         memberRoles,
+  //         assessmentRequestId: request.id,
+  //         currentStateId: requestCurrentStateId,
+  //         nextStateId: requestNextState,
+  //       });
+  //     }
+  //     return true;
+  //   } catch (error) {
+  //     await queryRunner.rollbackTransaction();
+  //     throw error;
+  //   } finally {
+  //     await queryRunner.release();
+  //   }
+  // }
 
   //------------------------------
   private async getProcessAndAction(processName: string, actionName: string) {
@@ -1755,8 +1746,6 @@ export class AssessmentRequestService {
         ],
       );
 
-    console.log(foundRequest);
-
     if (!foundRequest) {
       throw new NotFoundException(
         this.i18nService.t('messages.ERROR_NOT_FOUND_PROPERTY', {
@@ -1783,8 +1772,6 @@ export class AssessmentRequestService {
     if (!foundRequest.testcaseContents) {
       return response;
     }
-
-    console.log(foundRequest.testcaseContents);
 
     for (let i = 0; i < foundRequest.testcaseContents.length; i++) {
       const testcaseContent = foundRequest.testcaseContents[i];
@@ -1990,6 +1977,11 @@ export class AssessmentRequestService {
       }
 
       request.environment = new Environment({ id: environment.id });
+
+      await this.assessmentRequestRepository.save(request);
+    }
+    if (data.info) {
+      request.info = data.info;
       await this.assessmentRequestRepository.save(request);
     }
 

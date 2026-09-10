@@ -24,6 +24,9 @@ export class AssessmentRequest extends AbstractEntity<AssessmentRequest> {
   @Column()
   applicantId: string;
 
+  @Column({ nullable: true })
+  info: string;
+
   @ManyToOne(() => Member)
   applicant?: Member;
 

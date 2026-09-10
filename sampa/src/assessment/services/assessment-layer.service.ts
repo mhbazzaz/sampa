@@ -12,11 +12,11 @@ import { ActionEnum } from 'src/common/enums/action.enum';
 import { ProcessEnum } from 'src/common/enums/process.enum';
 import { userMapperLevel1 } from 'src/common/helpers/user-mapper-level-1';
 import { GroupMembershipRepository } from 'src/group-membership/repositories/group-membership.repository';
-import { LayerComment } from 'src/layer-comment/entities/layer-comment.entity';
 import { Member } from 'src/member/entities/member.entity';
 import { MemberRepository } from 'src/member/repositories/member.repository';
 import { ProcessRepository } from 'src/process/repositories/process.repository';
 import { Role } from 'src/role/entities/role.entity';
+import { RequestSpecItemRepository } from 'src/spec/repositories/request-spec-item.repository';
 import { StateTransitionRepository } from 'src/state-transition/repositories/state-transition.repository';
 import { StateTransitionService } from 'src/state-transition/services/state-transition.service';
 import { State } from 'src/states/entities/state.entity';
@@ -35,14 +35,13 @@ import { AssessmentRequest } from '../entities/assessment-request.entity';
 import { AssessmentTeam } from '../entities/assessment-team.entity';
 import { AssessmentLayerRepository } from '../repositories/assessment-layer.repository';
 import { AssessmentRequestRepository } from '../repositories/assessment-request.repository';
-import { AssessmentTeamRepository } from '../repositories/assessment-team.repository';
 
 @Injectable()
 export class AssessmentLayerService {
   constructor(
     private readonly assessmentLayerRepository: AssessmentLayerRepository,
     private readonly memberRepository: MemberRepository,
-    private readonly assessmentTeamRepository: AssessmentTeamRepository,
+    private readonly requestSpecItemRepository: RequestSpecItemRepository,
     private readonly assessmentRequestRepository: AssessmentRequestRepository,
     private readonly stateTransitionRepository: StateTransitionRepository,
     private readonly stateTransitionService: StateTransitionService,
@@ -102,7 +101,7 @@ export class AssessmentLayerService {
     });
 
     const actionIds = actions.map((a) => a.id);
-    const actionNames = actions.map((a) => a.name);
+    // const actionNames = actions.map((a) => a.name);
 
     const stateTransitions = await this.stateTransitionRepository.findAll({
       where: { actionId: In(actionIds) },
@@ -115,8 +114,10 @@ export class AssessmentLayerService {
       return { result: [], count: 0 };
     }
 
-    const [layers, total] =
-      await this.assessmentLayerRepository.findAllPagination(skip, take, {
+    const [layers] = await this.assessmentLayerRepository.findAllPagination(
+      skip,
+      take,
+      {
         where: {
           stateId: In(allowedStateIds),
           assessmentTeams: { memberId },
@@ -134,11 +135,12 @@ export class AssessmentLayerService {
           },
         },
         order: { createdAt: 'DESC' },
-      });
+      },
+    );
 
-    if (!actionNames.includes(ActionEnum.LayerSpecOnboardingAccept)) {
-      return { result: layers, count: total };
-    }
+    // if (!actionNames.includes(ActionEnum.LayerSpecOnboardingAccept)) {
+    //   return { result: layers, count: total };
+    // }
 
     const layerSpecOnboardingState = await this.getStateByNameAndProcessName(
       'layerSpecOnboarding',
@@ -203,9 +205,8 @@ export class AssessmentLayerService {
   }
 
   //------------------------------
-  async updateAssessmentLayerStatusByActionMyTeam(
+  async assessmentLayerFinalizeSpec(
     layerId: string,
-    data: UpdateRequestLayerStatusByActionDto,
     memberId: string,
     memberRoles: Role[],
   ) {
@@ -214,7 +215,11 @@ export class AssessmentLayerService {
         id: layerId,
         assessmentTeams: { memberId: memberId },
       },
-      relations: { assessmentRequest: true },
+      relations: {
+        assessmentRequest: {
+          requestSpecContents: { requestSpecItem: { assessmentType: true } },
+        },
+      },
     });
 
     if (!requestLayer || !requestLayer.assessmentRequest) {
@@ -230,7 +235,7 @@ export class AssessmentLayerService {
 
     const { process, action } = await this.getProcessAndAction(
       ProcessEnum.AssessmentLayer,
-      data.action,
+      ActionEnum.OnboardingFinalizeSpecs,
     );
 
     const stateTransition = await this.stateTransitionService.getNextStatus({
@@ -250,84 +255,91 @@ export class AssessmentLayerService {
         { stateId: stateTransition.id },
       );
 
+      const allSpecItems = await this.requestSpecItemRepository.findAll({
+        where: {
+          assessmentType: { id: requestLayer?.assessmentTypeId },
+          environments: { id: requestLayer.assessmentRequest.environmentId },
+          assetTypeId: requestLayer.assessmentRequest.asset?.assetTypeId,
+        },
+        relations: { assessmentType: true },
+      });
+
+      const specCount =
+        requestLayer.assessmentRequest?.requestSpecContents?.filter(
+          (requestSpecContent) =>
+            requestSpecContent.requestSpecItem!.assessmentType!.findIndex(
+              (element) => element.id === requestLayer.assessmentTypeId,
+            ) > -1,
+        ).length;
+
+      if (!specCount || allSpecItems.length !== specCount) {
+        throw new BadRequestException(
+          this.i18nService.t('messages.ERROR_SPECS_NOT_FILLED_COMPLETELY'),
+        );
+      }
+
       // Adding comment for the layer
-      if (data.comment) {
-        const user = await this.memberRepository.findOne({
-          where: { id: memberId },
-          relations: { roles: true },
-        });
 
-        const roleId = user!.roles!.find(
-          (role) => role.name.split(' ')[1] === 'auditor',
-        )?.id;
-        const layerComment = new LayerComment({
-          layerId,
-          comment: data.comment,
-          memberId,
-          roleId,
-        });
-        await queryRunner.manager.save(LayerComment, layerComment);
-      }
-      // Adding comment for the layer
+      // if (data.action === ActionEnum.LayerSpecPreEvaluationNeedModifications) {
+      //   const { process, action } = await this.getProcessAndAction(
+      //     ProcessEnum.AssessmentRequest,
+      //     ActionEnum.PreEvaluationReject,
+      //   );
 
-      if (data.action === ActionEnum.LayerSpecPreEvaluationNeedModifications) {
-        const { process, action } = await this.getProcessAndAction(
-          ProcessEnum.AssessmentRequest,
-          ActionEnum.PreEvaluationReject,
-        );
+      //   const stateTransition = await this.stateTransitionService.getNextStatus(
+      //     {
+      //       processId: process.id,
+      //       actionId: action.id,
+      //       currentStateId: requestLayer.assessmentRequest!.stateId,
+      //     },
+      //   );
 
-        const stateTransition = await this.stateTransitionService.getNextStatus(
-          {
-            processId: process.id,
-            actionId: action.id,
-            currentStateId: requestLayer.assessmentRequest!.stateId,
-          },
-        );
+      //   await queryRunner.manager.update(
+      //     AssessmentRequest,
+      //     { id: requestLayer.assessmentRequestId },
+      //     { stateId: stateTransition.id },
+      //   );
+      // }
 
-        await queryRunner.manager.update(
-          AssessmentRequest,
-          { id: requestLayer.assessmentRequestId },
-          { stateId: stateTransition.id },
-        );
-      }
+      const nextRequestState = await this.updateRequestIfAllLayersAccepted(
+        queryRunner,
+        requestLayer.assessmentRequest!,
+        stateTransition.id,
+        ActionEnum.GroupReadyFinalizeSpecs,
+        [
+          ActionEnum.PendingLayerTestcasesSubmit,
+          ActionEnum.LayerAssessmentCompletedAccept,
+          ActionEnum.LayerAssessmentReviewAcceptBySAM,
+          ActionEnum.LayerAssessmentReviewNeedModificationsBySAM,
+          ActionEnum.LayerAssessmentCompletedFeedback,
+          ActionEnum.LayerAssessmentReviewAccept,
+          ActionEnum.LayerAssessmentReviewNeedModifications,
+          ActionEnum.LayerAssessmentReviewFinish,
+          ActionEnum.LayerAssessmentFulfilledReinstate,
+          ActionEnum.LayerReportIssuedRefer,
+          ActionEnum.LayerReportIssuedRemark,
+          ActionEnum.RemediateLayerVulnerabilitiesFinalize,
+          ActionEnum.RemediateLayerVulnerabilitiesDecline,
+          ActionEnum.ReviewLayerRemediatesApprove,
+          ActionEnum.ReviewLayerRemediatesReject,
+          ActionEnum.LayerReEvaluationRequestedAccept,
+          ActionEnum.LayerReEvaluationRequestedReject,
+        ],
+      );
 
-      let nextRequestState: string | undefined;
-      if (data.action === ActionEnum.LayerSpecPreEvaluationAccept) {
-        nextRequestState = await this.updateRequestIfAllLayersAccepted(
-          queryRunner,
-          requestLayer.assessmentRequest!,
-          stateTransition.id,
-          ActionEnum.PreEvaluationAccept,
-          [
-            ActionEnum.LayerSpecOnboardingAccept,
-            ActionEnum.PendingLayerTestcasesSubmit,
-            ActionEnum.LayerAssessmentCompletedAccept,
-            ActionEnum.LayerAssessmentReviewAccept,
-            ActionEnum.LayerReportIssuedRefer,
-            ActionEnum.RemediateLayerVulnerabilitiesFinalize,
-            ActionEnum.ReviewLayerRemediatesApprove,
-            ActionEnum.LayerReEvaluationRequestedAccept,
-          ],
-        );
-      }
+      const layerPrevState = await this.stateRepository.findOne({
+        where: {
+          name: 'groupReady',
+          process: { name: ProcessEnum.AssessmentLayer },
+        },
+      });
 
-      if (data.action === ActionEnum.LayerSpecOnboardingAccept) {
-        nextRequestState = await this.updateRequestIfAllLayersAccepted(
-          queryRunner,
-          requestLayer.assessmentRequest!,
-          stateTransition.id,
-          ActionEnum.OnboardingFinalizeSpecs,
-          [
-            ActionEnum.PendingLayerTestcasesSubmit,
-            ActionEnum.LayerAssessmentCompletedAccept,
-            ActionEnum.LayerAssessmentReviewAccept,
-            ActionEnum.LayerReportIssuedRefer,
-            ActionEnum.RemediateLayerVulnerabilitiesFinalize,
-            ActionEnum.ReviewLayerRemediatesApprove,
-            ActionEnum.LayerReEvaluationRequestedAccept,
-          ],
-        );
-      }
+      const layerNextState = await this.stateRepository.findOne({
+        where: {
+          name: 'onboarding',
+          process: { name: ProcessEnum.AssessmentLayer },
+        },
+      });
 
       await this.actionLogBufferService.flushToActionLog(
         {
@@ -337,12 +349,12 @@ export class AssessmentLayerService {
         {
           userId: memberId,
           roleIds: memberRoles.map((r) => r.id),
-          action: data.action as ActionEnum,
+          action: ActionEnum.OnboardingFinalizeSpecs,
           status: ActionLogStatusEnum.SUCCESS,
           assessmentRequestCurrentStateId: currentRequestState,
           assessmentRequestNextStateId: nextRequestState,
-          assessmentLayerCurrentStateId: layerCurrentStateId,
-          assessmentLayerNextStateId: stateTransition.id,
+          assessmentLayerCurrentStateId: layerPrevState?.id,
+          assessmentLayerNextStateId: layerNextState?.id,
         },
         queryRunner,
       );
@@ -1098,12 +1110,19 @@ export class AssessmentLayerService {
           }),
         );
       }
+      console.log({
+        processId: process.id,
+        actionId: action.id,
+        currentStateId: assessmentRequest.stateId,
+      });
 
       const nextRequestState = await this.stateTransitionService.getNextStatus({
         processId: process.id,
         actionId: action.id,
         currentStateId: assessmentRequest.stateId,
       });
+
+      console.log(nextRequestState);
 
       await queryRunner.manager.update(
         AssessmentRequest,

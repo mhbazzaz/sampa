@@ -48,6 +48,7 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
     assetToAuditBaseline: string;
     applicantManagerId: string;
     cisoId: string;
+    info: string;
     code: string | undefined;
   }) {
     const queryRunner = this.dataSource.createQueryRunner();
@@ -95,6 +96,7 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
         applicantManagerId: data.applicantManagerId,
         cisoId: data.cisoId,
         assetToAuditBaseline: data.assetToAuditBaseline,
+        info: data.info,
         requestNumber,
       });
 
@@ -209,6 +211,7 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
       .leftJoinAndSelect('request.environment', 'environment')
       .leftJoinAndSelect('request.asset', 'asset')
       .leftJoinAndSelect('request.assessmentLayers', 'assessmentLayers')
+      .leftJoinAndSelect('assessmentLayers.state', 'assessmentLayersState')
       .leftJoinAndSelect('assessmentLayers.assessmentType', 'assessmentType');
 
     if (stateTransitionIds.length > 0) {
@@ -264,6 +267,20 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
           lastId: lastId,
         },
       );
+    }
+
+    if (
+      actions.findIndex((action) => action.name == 'approved_assignSAM') !== -1
+    ) {
+      qb.orWhere('("assessmentLayersState"."name" = \'approved\')');
+    }
+
+    if (
+      actions.findIndex(
+        (action) => action.name == 'SAM_assigned_add_supervise',
+      ) !== -1
+    ) {
+      qb.orWhere('("assessmentLayersState"."name" = \'SAM assigned\')');
     }
 
     qb.orderBy('request.updatedAt', 'DESC')
@@ -367,7 +384,6 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
 
         if (!joined.has(currentPath)) {
           const alias = currentPath.replace(/\./g, '_');
-          console.log(`${parentAlias}.${part}`, alias);
 
           query.leftJoinAndSelect(`${parentAlias}.${part}`, alias);
           joined.add(currentPath);
@@ -961,5 +977,54 @@ export class AssessmentRequestRepository extends AbstractRepository<AssessmentRe
     queryBuilder = queryBuilder.skip(query.skip).take(query.take);
 
     return queryBuilder.getManyAndCount();
+  }
+
+  //------------------------------
+  async getAccessibleRequestIds(
+    member: Member,
+    memberRoles: Role[],
+    actions: Action[],
+  ): Promise<string[]> {
+    const hasReadAccess = actions.some(
+      (action) =>
+        action.name === ActionEnum.Read &&
+        action.process?.name === ProcessEnum.AssessmentRequest,
+    );
+
+    const qb = this.assessmentRequestRepository
+      .createQueryBuilder('assessmentRequest')
+      .select('assessmentRequest.id', 'id')
+      .where('assessmentRequest.deletedAt IS NULL');
+
+    if (!hasReadAccess) {
+      const teams = await this.groupMembershipRepository.getUserTeamMembers(
+        member.id,
+      );
+      const isApplicantManager = memberRoles.some(
+        (role) => role.name === 'applicant manager',
+      );
+
+      if (isApplicantManager) {
+        if (teams.length > 0) {
+          qb.andWhere(
+            '(assessmentRequest.applicantManagerId = :memberId OR assessmentRequest.applicantId IN (:...teams))',
+            { memberId: member.id, teams },
+          );
+        } else {
+          qb.andWhere('assessmentRequest.applicantManagerId = :memberId', {
+            memberId: member.id,
+          });
+        }
+      } else if (teams.length > 0) {
+        qb.andWhere('assessmentRequest.applicantId IN (:...teams)', {
+          teams,
+        });
+      } else {
+        return [];
+      }
+    }
+
+    const rows = await qb.getRawMany<{ id: string }>();
+    return rows.map((row) => row.id);
   }
 }

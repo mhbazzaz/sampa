@@ -7,9 +7,9 @@ import { I18nService } from 'nestjs-i18n';
 import { ActionLogBufferService } from 'src/action-log/services/action-log-buffer.service';
 import { AssessmentTypeRepository } from 'src/assessment/repositories/assessment-type.repository';
 import { AssetTypeRepository } from 'src/asset/repositories/asset-type.repository';
-import { CategoryEnum } from 'src/common/enums/category.enum';
 import { ValidationService } from 'src/common/validations/schema-validation.service';
 import { Environment } from 'src/environment/entities/environment.entity';
+import { EnvironmentRepository } from 'src/environment/repositories/environment.repository';
 import { FindOneOptions, FindOptionsWhere, In } from 'typeorm';
 import { CreateSpecItemDto } from '../dto/input/create-spec-item.dto';
 import { FindFilteredRequestSpecItemQueryDto } from '../dto/input/find-filtered-request-spec-item.dto';
@@ -17,7 +17,6 @@ import { GetSpecItemDto } from '../dto/input/get-spec-item.dto';
 import { UpdateSpecItemDto } from '../dto/input/update-spec-item.dto';
 import { RequestSpecItem } from '../entities/request-spec-item.entity';
 import { RequestSpecItemRepository } from '../repositories/request-spec-item.repository';
-import { Role } from 'src/role/entities/role.entity';
 import { EntityTypeEnum } from 'src/common/enums/entity-type.enum';
 
 @Injectable()
@@ -26,6 +25,7 @@ export class RequestSpecItemService {
     private readonly requestSpecItemRepository: RequestSpecItemRepository,
     private readonly validationService: ValidationService,
     private readonly assetTypeRepository: AssetTypeRepository,
+    private readonly environmentRepository: EnvironmentRepository,
     private readonly assessmentTypeRepository: AssessmentTypeRepository,
     private readonly i18nService: I18nService,
     private readonly actionLogBufferService: ActionLogBufferService,
@@ -33,6 +33,8 @@ export class RequestSpecItemService {
 
   //------------------------------
   async create(data: CreateSpecItemDto): Promise<RequestSpecItem> {
+    // await this.validationService.validateSchema(data.value);
+
     const body = { ...data, value: JSON.stringify(data.value) };
     return await this.requestSpecItemRepository.save(body);
   }
@@ -99,15 +101,16 @@ export class RequestSpecItemService {
       id: currentSpec.id,
     };
 
+    const newEnvironments: string[] = [];
     for (const [key, value] of Object.entries(updateRequestSpecItem)) {
-      const typedKey = key as keyof typeof updateRequestSpecItem;
+      const typedKey = key as keyof UpdateSpecItemDto;
 
       if (value !== undefined) {
-        switch (key) {
+        switch (typedKey) {
           case 'value':
             await this.validationService.validateSchema(value);
-            updatePayload.value = JSON.stringify(value);
-            updateDto.value = JSON.stringify(value);
+            updatePayload[typedKey] = JSON.stringify(value);
+            updateDto[typedKey] = JSON.stringify(value);
             break;
 
           case 'assessmentTypeIds':
@@ -122,7 +125,7 @@ export class RequestSpecItemService {
                 this.i18nService.t('messages.ERROR_ASSESSMENT_TYPE_ID_INVALID'),
               );
             }
-            updatePayload.assessmentType = assessmentTypes;
+            updatePayload['assessmentType'] = assessmentTypes;
             break;
 
           case 'assetTypeId':
@@ -137,26 +140,22 @@ export class RequestSpecItemService {
                 }),
               );
             }
-            updatePayload.assetTypeId = assetType.id;
-            updateDto.assetTypeId = assetType.id;
+            updatePayload[typedKey] = assetType.id;
+            updateDto[typedKey] = assetType.id;
             break;
 
           case 'environmentIds':
-            updatePayload.environments = (value as string[]).map(
+            updatePayload['environments'] = (value as string[]).map(
               (v) => new Environment({ id: v }),
             );
-            updateDto.environmentIds = value as string[];
-            break;
-
-          case 'isPublic':
-          case 'isBaseSpec':
-            updatePayload[key] = value;
-            updateDto[key] = value;
+            updateDto['environmentIds'] = value as string[];
             break;
 
           default:
-            updatePayload[key] = value;
-            updateDto[key] = value;
+            if (typedKey !== 'environmentId') {
+              updatePayload[typedKey] = value;
+              updateDto[typedKey] = value;
+            }
             break;
         }
       }
@@ -213,14 +212,7 @@ export class RequestSpecItemService {
   }
 
   //------------------------------
-  async findAllPaginationUserScope(
-    query: GetSpecItemDto,
-    memberRoles: Role[],
-  ) {
-    const isExternal = memberRoles.some(
-      (role) => role.category === CategoryEnum.EXTERNAL,
-    );
-
+  async findAllPaginationUserScope(query: GetSpecItemDto) {
     return await this.requestSpecItemRepository.findAllPagination(
       query.skip,
       query.take,
@@ -234,7 +226,6 @@ export class RequestSpecItemService {
             ? { id: query.environmentId }
             : undefined,
           assetTypeId: query.assetTypeId ? query.assetTypeId : undefined,
-          ...(isExternal ? { isPublic: true } : {}),
         },
         relations: { assessmentType: { assessmentLayers: true } },
         order: { createdAt: 'DESC' },
