@@ -83,6 +83,23 @@ type ExcelReportSheetState = {
   maxWidths: number[];
 };
 
+const EXCEL_MAX_COLUMN_WIDTH = 72;
+const EXCEL_DEFAULT_MIN_COLUMN_WIDTH = 22;
+const EXCEL_DATA_ROW_HEIGHT = 24;
+const EXCEL_HEADER_ROW_HEIGHT = 28;
+const EXCEL_THEME = {
+  navy: 'FF0F3D68',
+  navyMid: 'FF1F4E79',
+  accent: 'FF2E75B6',
+  headerText: 'FFFFFFFF',
+  bodyText: 'FF111827',
+  labelFill: 'FFE8F1FA',
+  altRow: 'FFF4F8FC',
+  white: 'FFFFFFFF',
+  muted: 'FF6B7280',
+  border: 'FFD0D7DE',
+};
+
 @Injectable()
 export class AssetService {
   private readonly userScopeLogger = new Logger('UserScope');
@@ -828,7 +845,9 @@ export class AssetService {
       const hasSupervisorRole = userRoles.some(
         (r) => r.name === AssetRoles.AssetSupervisor,
       );
-      const hasUserRole = userRoles.some((r) => r.name === AssetRoles.AssetUser);
+      const hasUserRole = userRoles.some(
+        (r) => r.name === AssetRoles.AssetUser,
+      );
 
       this.logUserScope(traceId, 'find-one-access.start', {
         username: user?.username,
@@ -1630,9 +1649,74 @@ export class AssetService {
   private getExcelThinBorder(): Partial<ExcelJS.Borders> {
     const edge: Partial<ExcelJS.Border> = {
       style: 'thin',
-      color: { argb: 'FFD0D7DE' },
+      color: { argb: EXCEL_THEME.border },
     };
     return { top: edge, left: edge, bottom: edge, right: edge };
+  }
+
+  //------------------------------
+  private getExcelSolidFill(argb: string): ExcelJS.FillPattern {
+    return {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb },
+    };
+  }
+
+  //------------------------------
+  private formatExcelGeneratedAt(): string {
+    const now = new Date();
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(
+      now.getDate(),
+    )} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  }
+
+  //------------------------------
+  getExcelReportColumnMinWidth(key: string): number {
+    const normalized = key.replace(/[._\s-]/g, '').toLowerCase();
+    const preferredByKey: Record<string, number> = {
+      name: 36,
+      externalrefid: 32,
+      locationaddress: 50,
+      location: 30,
+      locationcode: 20,
+      model: 28,
+      accountablename: 32,
+      responsiblename: 32,
+      accountabledeputy: 28,
+      accountablemanagement: 30,
+      accountablegroup: 24,
+      responsibledeputy: 28,
+      responsiblemanagement: 30,
+      responsiblegroup: 24,
+      version: 14,
+    };
+
+    if (preferredByKey[normalized]) {
+      return preferredByKey[normalized];
+    }
+    if (normalized.includes('address')) {
+      return 50;
+    }
+    if (normalized.includes('externalref') || normalized.endsWith('refid')) {
+      return 32;
+    }
+    if (normalized.includes('model')) {
+      return 28;
+    }
+    if (normalized.endsWith('name') || normalized.includes('name')) {
+      return 32;
+    }
+    if (normalized.includes('location')) {
+      return 30;
+    }
+
+    const headerLength = this.formatReportColumnHeader(key).length;
+    return Math.max(
+      EXCEL_DEFAULT_MIN_COLUMN_WIDTH,
+      Math.min(40, headerLength + 8),
+    );
   }
 
   //------------------------------
@@ -1743,7 +1827,10 @@ export class AssetService {
   ): ExcelJS.Worksheet {
     return workbook.addWorksheet(name, {
       views: [{ state: 'frozen', ySplit: 1, showGridLines: true }],
-      properties: { defaultRowHeight: 18 },
+      properties: {
+        defaultRowHeight: EXCEL_DATA_ROW_HEIGHT,
+        defaultColWidth: EXCEL_DEFAULT_MIN_COLUMN_WIDTH,
+      },
     });
   }
 
@@ -1757,23 +1844,19 @@ export class AssetService {
       return {
         header,
         key,
-        width: Math.min(48, Math.max(12, header.length + 4)),
+        width: this.getExcelReportColumnMinWidth(key),
       };
     });
 
     const headerRow = worksheet.getRow(1);
-    headerRow.height = 22;
+    headerRow.height = EXCEL_HEADER_ROW_HEIGHT;
     headerRow.font = {
       bold: true,
-      color: { argb: 'FFFFFFFF' },
+      color: { argb: EXCEL_THEME.headerText },
       name: 'Calibri',
-      size: 11,
+      size: 12,
     };
-    headerRow.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FF1F4E79' },
-    };
+    headerRow.fill = this.getExcelSolidFill(EXCEL_THEME.navyMid);
     headerRow.alignment = {
       vertical: 'middle',
       horizontal: 'center',
@@ -1781,12 +1864,15 @@ export class AssetService {
     };
     headerRow.eachCell((cell: ExcelJS.Cell) => {
       cell.border = this.getExcelThinBorder();
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: 'center',
+        wrapText: true,
+      };
     });
     headerRow.commit();
 
-    return keys.map((key) =>
-      Math.min(48, Math.max(12, this.formatReportColumnHeader(key).length + 4)),
-    );
+    return keys.map((key) => this.getExcelReportColumnMinWidth(key));
   }
 
   //------------------------------
@@ -1796,9 +1882,17 @@ export class AssetService {
     values: Record<string, unknown>,
   ) {
     const isAlt = row.number % 2 === 0;
-    row.font = { name: 'Calibri', size: 10 };
-    row.alignment = { vertical: 'middle', wrapText: true };
-    row.height = 18;
+    row.font = {
+      name: 'Calibri',
+      size: 11,
+      color: { argb: EXCEL_THEME.bodyText },
+    };
+    row.alignment = {
+      vertical: 'middle',
+      horizontal: 'center',
+      wrapText: true,
+    };
+    row.height = EXCEL_DATA_ROW_HEIGHT;
 
     row.eachCell(
       { includeEmpty: true },
@@ -1808,15 +1902,11 @@ export class AssetService {
         cell.border = this.getExcelThinBorder();
         cell.alignment = {
           vertical: 'middle',
-          horizontal: this.isNumericReportValue(key, raw) ? 'right' : 'left',
+          horizontal: 'center',
           wrapText: true,
         };
         if (isAlt) {
-          cell.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFF7F9FC' },
-          };
+          cell.fill = this.getExcelSolidFill(EXCEL_THEME.altRow);
         }
         if (this.isDateReportValue(raw)) {
           cell.numFmt = 'yyyy-mm-dd hh:mm';
@@ -1836,10 +1926,13 @@ export class AssetService {
     values: Record<string, unknown>,
   ) {
     keys.forEach((key, index) => {
-      const cellText = String(this.coerceExcelCellValue(key, values[key]) ?? '');
+      const cellText = String(
+        this.coerceExcelCellValue(key, values[key]) ?? '',
+      );
+      const minWidth = this.getExcelReportColumnMinWidth(key);
       maxWidths[index] = Math.min(
-        48,
-        Math.max(maxWidths[index] || 12, cellText.length + 2),
+        EXCEL_MAX_COLUMN_WIDTH,
+        Math.max(maxWidths[index] || minWidth, cellText.length + 4, minWidth),
       );
     });
   }
@@ -1855,13 +1948,17 @@ export class AssetService {
         name: 'Calibri',
         size: 11,
       };
-      worksheet.getColumn(1).width = 20;
+      worksheet.getColumn(1).width = 28;
       return;
     }
 
-    worksheet.columns.forEach((column: Partial<ExcelJS.Column>, index: number) => {
-      column.width = maxWidths[index] || 12;
-    });
+    worksheet.columns.forEach(
+      (column: Partial<ExcelJS.Column>, index: number) => {
+        const key = keys[index] || '';
+        column.width =
+          maxWidths[index] || this.getExcelReportColumnMinWidth(key);
+      },
+    );
 
     const lastColumn = worksheet.getColumn(keys.length);
     const lastRow = Math.max(worksheet.rowCount, 1);
@@ -1907,6 +2004,44 @@ export class AssetService {
   }
 
   //------------------------------
+  private styleExcelMergedBannerRow(
+    sheet: ExcelJS.Worksheet,
+    rowNumber: number,
+    value: string,
+    options: {
+      fill: string;
+      fontSize: number;
+      height: number;
+      italic?: boolean;
+      bold?: boolean;
+      fontColor?: string;
+    },
+  ) {
+    sheet.mergeCells(`A${rowNumber}:B${rowNumber}`);
+    const row = sheet.getRow(rowNumber);
+    row.height = options.height;
+    for (const col of [1, 2]) {
+      const cell = row.getCell(col);
+      cell.fill = this.getExcelSolidFill(options.fill);
+      cell.font = {
+        bold: options.bold !== false,
+        italic: options.italic,
+        name: 'Calibri',
+        size: options.fontSize,
+        color: { argb: options.fontColor || EXCEL_THEME.headerText },
+      };
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: 'center',
+        wrapText: true,
+      };
+      cell.border = this.getExcelThinBorder();
+    }
+    row.getCell(1).value = value;
+    row.commit();
+  }
+
+  //------------------------------
   private async writeExcelReportInfoSheet(
     workbook: ExcelJS.stream.xlsx.WorkbookWriter,
     options: {
@@ -1915,73 +2050,145 @@ export class AssetService {
     },
   ) {
     const sheet = workbook.addWorksheet('Info', {
-      properties: { defaultRowHeight: 18 },
+      views: [{ showGridLines: false, state: 'frozen', ySplit: 2 }],
+      properties: {
+        defaultRowHeight: 22,
+        tabColor: { argb: EXCEL_THEME.accent },
+      },
+      pageSetup: {
+        orientation: 'portrait',
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 1,
+      },
     });
 
-    sheet.mergeCells('A1:B1');
-    const titleCell = sheet.getCell('A1');
-    titleCell.value = options.title;
-    titleCell.font = {
-      bold: true,
-      name: 'Calibri',
-      size: 16,
-      color: { argb: 'FF1F4E79' },
-    };
-    titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
-    sheet.getRow(1).height = 28;
+    const filterRows =
+      options.rows.length > 0
+        ? options.rows
+        : [{ label: 'Filters', value: 'None' }];
+    const labelWidth = Math.min(
+      42,
+      Math.max(28, ...filterRows.map((row) => row.label.length + 8), 18),
+    );
+    const valueWidth = Math.min(
+      72,
+      Math.max(
+        42,
+        ...filterRows.map((row) => String(row.value).length + 8),
+        options.title.length + 8,
+      ),
+    );
+    sheet.columns = [{ width: labelWidth }, { width: valueWidth }];
 
-    const headerRow = sheet.getRow(2);
+    this.styleExcelMergedBannerRow(sheet, 1, options.title, {
+      fill: EXCEL_THEME.navy,
+      fontSize: 18,
+      height: 36,
+    });
+    this.styleExcelMergedBannerRow(
+      sheet,
+      2,
+      `Asset Report  •  Generated ${this.formatExcelGeneratedAt()}`,
+      {
+        fill: EXCEL_THEME.navyMid,
+        fontSize: 11,
+        height: 22,
+        italic: true,
+        bold: false,
+      },
+    );
+
+    const spacer = sheet.getRow(3);
+    spacer.height = 10;
+    spacer.commit();
+
+    this.styleExcelMergedBannerRow(sheet, 4, 'FILTER CRITERIA', {
+      fill: EXCEL_THEME.accent,
+      fontSize: 12,
+      height: 24,
+    });
+
+    const headerRow = sheet.getRow(5);
+    headerRow.height = EXCEL_HEADER_ROW_HEIGHT;
     headerRow.getCell(1).value = 'Field';
     headerRow.getCell(2).value = 'Value';
     headerRow.font = {
       bold: true,
-      color: { argb: 'FFFFFFFF' },
+      color: { argb: EXCEL_THEME.headerText },
       name: 'Calibri',
-      size: 11,
+      size: 12,
     };
-    headerRow.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FF1F4E79' },
+    headerRow.fill = this.getExcelSolidFill(EXCEL_THEME.navyMid);
+    headerRow.alignment = {
+      vertical: 'middle',
+      horizontal: 'center',
+      wrapText: true,
     };
-    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
     headerRow.eachCell((cell: ExcelJS.Cell) => {
+      cell.fill = this.getExcelSolidFill(EXCEL_THEME.navyMid);
       cell.border = this.getExcelThinBorder();
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: 'center',
+        wrapText: true,
+      };
     });
     headerRow.commit();
 
-    options.rows.forEach((item, index) => {
-      const row = sheet.getRow(index + 3);
+    filterRows.forEach((item, index) => {
+      const row = sheet.getRow(index + 6);
+      const isAlt = index % 2 === 1;
+      row.height = EXCEL_DATA_ROW_HEIGHT;
       row.getCell(1).value = item.label;
-      row.getCell(2).value = item.value;
-      row.font = { name: 'Calibri', size: 10 };
-      row.getCell(1).font = { name: 'Calibri', size: 10, bold: true };
-      row.getCell(1).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFEEF3F8' },
+      row.getCell(2).value = item.value || '—';
+      row.getCell(1).font = {
+        name: 'Calibri',
+        size: 11,
+        bold: true,
+        color: { argb: EXCEL_THEME.bodyText },
       };
-      row.eachCell((cell: ExcelJS.Cell) => {
+      row.getCell(2).font = {
+        name: 'Calibri',
+        size: 11,
+        color: { argb: EXCEL_THEME.bodyText },
+      };
+      row.getCell(1).fill = this.getExcelSolidFill(EXCEL_THEME.labelFill);
+      if (isAlt) {
+        row.getCell(2).fill = this.getExcelSolidFill(EXCEL_THEME.altRow);
+      } else {
+        row.getCell(2).fill = this.getExcelSolidFill(EXCEL_THEME.white);
+      }
+      row.eachCell({ includeEmpty: true }, (cell: ExcelJS.Cell) => {
         cell.border = this.getExcelThinBorder();
-        cell.alignment = { vertical: 'middle', wrapText: true };
+        cell.alignment = {
+          vertical: 'middle',
+          horizontal: 'center',
+          wrapText: true,
+        };
       });
       row.commit();
     });
 
-    const labelWidth = Math.min(
-      36,
-      Math.max(14, ...options.rows.map((row) => row.label.length + 4), 10),
+    const footerRowNumber = filterRows.length + 6;
+    const footer = sheet.getRow(footerRowNumber);
+    footer.height = 18;
+    footer.commit();
+
+    this.styleExcelMergedBannerRow(
+      sheet,
+      footerRowNumber + 1,
+      'This sheet lists the filters used to generate the data worksheets.',
+      {
+        fill: EXCEL_THEME.labelFill,
+        fontSize: 9,
+        height: 20,
+        italic: true,
+        bold: false,
+        fontColor: EXCEL_THEME.muted,
+      },
     );
-    const valueWidth = Math.min(
-      60,
-      Math.max(
-        24,
-        ...options.rows.map((row) => String(row.value).length + 4),
-        options.title.length + 4,
-      ),
-    );
-    sheet.getColumn(1).width = labelWidth;
-    sheet.getColumn(2).width = valueWidth;
+
     sheet.commit();
   }
 
@@ -3403,11 +3610,7 @@ export class AssetService {
       );
     }
 
-    const managedUsers = this.getAllManagedUsers(
-      userId,
-      allUsers,
-      logTraceId,
-    );
+    const managedUsers = this.getAllManagedUsers(userId, allUsers, logTraceId);
     this.logUserScope(logTraceId, 'subordinates.reporting-line', {
       managerEmployeeId: userId,
       inputUserCount: allUsers.length,
@@ -3875,11 +4078,7 @@ export class AssetService {
   }
 
   //------------------------------
-  getAllManagedUsers(
-    userId: string,
-    allUsers: any[],
-    traceId?: string,
-  ): any[] {
+  getAllManagedUsers(userId: string, allUsers: any[], traceId?: string): any[] {
     const logTraceId = traceId || this.createUserScopeTraceId();
     const normalizedUserId = this.normalizeHrmsId(userId);
     if (
